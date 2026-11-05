@@ -19,7 +19,6 @@ import {
   INITIAL_TRAINING_HISTORY,
 } from './data/workouts';
 import { TodayHeader } from './components/TodayHeader';
-import { HomeTab } from './components/HomeTab';
 import { WeeklyMenuTab } from './components/WeeklyMenuTab';
 import { PersonalTrainerTab } from './components/PersonalTrainerTab';
 import { BatchCookingTab } from './components/BatchCookingTab';
@@ -29,7 +28,7 @@ import {
   subscribeHouseholdRealtime,
 } from './services/googleEcosystem';
 
-type MainTab = 'inicio' | 'menu' | 'entreno' | 'batch' | 'compra';
+type MainTab = 'hoy' | 'entreno' | 'batch' | 'compra';
 
 const STORAGE_KEY = 'agfit_oviedo_v3';
 const USER_STORAGE_KEY = 'agfit_device_user';
@@ -77,7 +76,7 @@ export function App() {
     return null;
   });
 
-  const [activeTab, setActiveTab] = useState<MainTab>('inicio');
+  const [activeTab, setActiveTab] = useState<MainTab>('hoy');
   const [theme, setTheme] = useState<ThemeMode>('dark');
   const [selectedDayId, setSelectedDayId] = useState<DayId>(todayDayId);
   const [activeTemplateKey, setActiveTemplateKey] = useState<'semana_a' | 'semana_b' | 'semana_c'>('semana_a');
@@ -403,19 +402,23 @@ export function App() {
     );
   }
 
-  const todayPlan = days.find((d) => d.day === todayDayId) || days[0];
   const currentSelectedDay = days.find((d) => d.day === selectedDayId) || days[0];
 
   const TABS: Array<{ id: MainTab; label: string }> = [
-    { id: 'inicio', label: 'Inicio' },
-    { id: 'menu', label: 'Menú' },
+    { id: 'hoy', label: 'Hoy' },
     { id: 'entreno', label: 'Entreno' },
     { id: 'batch', label: 'Cocina' },
     { id: 'compra', label: 'Compra' },
   ];
 
   return (
-    <div className="min-h-dvh bg-[#F2F2F7] dark:bg-black text-slate-900 dark:text-white pb-24 transition-colors">
+    <div className="min-h-dvh bg-[#F2F2F7] dark:bg-[#09090B] text-slate-900 dark:text-white pb-24 transition-colors relative overflow-x-hidden">
+      {/* Subtle Top Ambient Emerald Glow in Dark Mode */}
+      <div
+        aria-hidden="true"
+        className="hidden dark:block pointer-events-none fixed -top-44 left-1/2 -translate-x-1/2 w-[520px] h-[360px] rounded-full bg-[#30D158]/[0.07] blur-[110px] z-0"
+      />
+
       <TodayHeader
         days={days}
         selectedDayId={selectedDayId}
@@ -430,19 +433,19 @@ export function App() {
           setWeightLogs((prev) => [...prev, { ...entry, id: `w_${Date.now()}` }])
         }
         syncActive={cloudConnected}
-        showDayStrip={activeTab === 'menu'}
+        showDayStrip={activeTab === 'hoy' || activeTab === 'entreno'}
       />
 
-      <main className="max-w-2xl mx-auto px-4 pt-5">
-        {activeTab === 'inicio' && (
-          <HomeTab
-            day={todayPlan}
+      <main className="relative z-10 max-w-2xl mx-auto px-4 pt-5">
+        {activeTab === 'hoy' && (
+          <WeeklyMenuTab
+            days={days}
+            selectedDayId={selectedDayId}
+            todayDayId={todayDayId}
             activeUser={activeUser}
-            customRecipes={customRecipes}
-            onGoToMenu={() => {
-              setSelectedDayId(todayDayId);
-              setActiveTab('menu');
-            }}
+            activeTemplateKey={activeTemplateKey}
+            onApplyTemplate={handleApplyTemplate}
+            onUpdateDay={handleUpdateDay}
             onGoToWorkout={() => setActiveTab('entreno')}
             onToggleSupplement={(dayId, key) =>
               handleUpdateDay(dayId, (prev) => ({
@@ -453,17 +456,6 @@ export function App() {
                 },
               }))
             }
-          />
-        )}
-
-        {activeTab === 'menu' && (
-          <WeeklyMenuTab
-            days={days}
-            selectedDayId={selectedDayId}
-            activeUser={activeUser}
-            activeTemplateKey={activeTemplateKey}
-            onApplyTemplate={handleApplyTemplate}
-            onUpdateDay={handleUpdateDay}
             customRecipes={customRecipes}
           />
         )}
@@ -531,10 +523,10 @@ export function App() {
         )}
       </main>
 
-      {/* Clean Typographic Bottom Dock (Zero icons/emojis) */}
+      {/* Clean 4-Tab Typographic Bottom Dock (Zero icons/emojis) */}
       <nav
         aria-label="Navegación principal"
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white/90 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl border border-black/10 dark:border-white/10 rounded-full p-1 shadow-xl flex items-center gap-0.5 no-print"
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white/90 dark:bg-[#121215]/95 backdrop-blur-2xl border border-black/10 dark:border-white/10 rounded-full p-1.5 shadow-2xl flex items-center gap-1 no-print"
       >
         {TABS.map((tab) => {
           const active = activeTab === tab.id;
@@ -543,10 +535,10 @@ export function App() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-5 py-2 rounded-full text-xs font-extrabold tracking-tight transition-all cursor-pointer ${
                 active
-                  ? 'bg-slate-900 text-white dark:bg-white dark:text-black shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  ? 'bg-[#30D158] text-black shadow-sm'
+                  : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               {tab.label}

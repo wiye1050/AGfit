@@ -3,7 +3,6 @@
 :root {
   color-scheme: light dark;
   --apple-green: #30d158;
-  --apple-pink: #ff2d55;
   --apple-blue: #0a84ff;
   --apple-orange: #ff9f0a;
   --accent-color: var(--apple-green);
@@ -29,34 +28,35 @@ body {
   min-block-size: 100dvh;
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif;
-  letter-spacing: -0.012em;
+  letter-spacing: -0.014em;
 }
 
-/* Apple-style surfaces */
+/* Performance Fitness Cards */
 .apple-card {
   background-color: #ffffff;
   border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.035);
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.03);
 }
 
 html.dark .apple-card {
-  background-color: #1c1c1e;
+  background-color: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: none;
+  backdrop-filter: blur(20px);
 }
 
 .apple-pill-surface {
-  background-color: #e5e5ea;
+  background-color: rgba(0, 0, 0, 0.05);
 }
 
 html.dark .apple-pill-surface {
-  background-color: #2c2c2e;
+  background-color: rgba(255, 255, 255, 0.07);
 }
 
 @keyframes sheetSlideUp {
   from {
     opacity: 0;
-    transform: translateY(28px) scale(0.98);
+    transform: translateY(24px) scale(0.98);
   }
   to {
     opacity: 1;
@@ -65,7 +65,7 @@ html.dark .apple-pill-surface {
 }
 
 .animate-sheet {
-  animation: sheetSlideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: sheetSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .no-scrollbar::-webkit-scrollbar {
