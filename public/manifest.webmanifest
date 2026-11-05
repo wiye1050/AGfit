@@ -1,0 +1,18 @@
+{
+  "name": "AGfit · Guille & Alba (Oviedo)",
+  "short_name": "AGfit",
+  "description": "Centro Operativo de Nutrición, Batch Cooking, Turnos HUCA y Entrenamiento Enjoy Oviedo + Pádel",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B1120",
+  "theme_color": "#0B1120",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/agfit-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
