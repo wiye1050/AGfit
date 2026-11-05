@@ -20,6 +20,7 @@ import { RECIPE_MAP } from '../data/recipes';
 interface TodayHeaderProps {
   days: DayPlan[];
   selectedDayId: DayId;
+  todayDayId: DayId;
   onSelectDay: (day: DayId) => void;
   profileView: ProfileView;
   onChangeProfileView: (view: ProfileView) => void;
@@ -37,9 +38,18 @@ interface TodayHeaderProps {
   syncActive: boolean;
 }
 
+const SHIFT_SHORT_BADGE: Record<string, string> = {
+  manana: '☀️ M',
+  tarde: '🌆 T',
+  noche: '🌙 N',
+  saliente: '🛌 S',
+  libre: '🎉 L',
+};
+
 export const TodayHeader: React.FC<TodayHeaderProps> = ({
   days,
   selectedDayId,
+  todayDayId,
   onSelectDay,
   profileView,
   onChangeProfileView,
@@ -86,55 +96,72 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
 
   return (
     <>
-      <header className="sticky top-0 z-30 bg-[#F2F2F7]/85 dark:bg-black/80 backdrop-blur-2xl border-b border-black/5 dark:border-white/10">
-        <div className="max-w-4xl mx-auto px-4 pt-3 pb-2.5 space-y-3">
-          {/* Row 1: Minimal Apple Title + Segmented Profile Switcher + 3 Circle Actions */}
+      <header className="sticky top-0 z-30 bg-[#F2F2F7]/90 dark:bg-black/85 backdrop-blur-2xl border-b border-black/5 dark:border-white/10">
+        <div className="max-w-3xl mx-auto px-4 pt-2.5 pb-2 space-y-2">
+          {/* Row 1: Brand + Who is looking (Guille | Alba | Ambos) + Utilities */}
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#30D158] to-[#0A84FF] flex items-center justify-center text-black font-black text-xs shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-xl bg-[#30D158] flex items-center justify-center text-black font-black text-xs">
                 AG
               </div>
-              <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+              <span className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white hidden sm:inline">
                 AGfit
               </span>
             </div>
 
-            {/* iOS Segmented Control */}
+            {/* Primary Person Switcher: Clear color coding */}
             <div className="apple-pill-surface p-1 rounded-full inline-flex items-center">
-              {(['pareja', 'guille', 'alba'] as ProfileView[]).map((view) => {
-                const active = profileView === view;
-                return (
-                  <button
-                    key={view}
-                    type="button"
-                    onClick={() => onChangeProfileView(view)}
-                    className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer capitalize ${
-                      active
-                        ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
-                        : 'text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    {view === 'pareja' ? 'Ambos' : view}
-                  </button>
-                );
-              })}
+              <button
+                type="button"
+                onClick={() => onChangeProfileView('guille')}
+                className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  profileView === 'guille'
+                    ? 'bg-[#30D158] text-black shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                🟢 Guille
+              </button>
+              <button
+                type="button"
+                onClick={() => onChangeProfileView('alba')}
+                className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  profileView === 'alba'
+                    ? 'bg-[#FF2D55] text-white shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                🔴 Alba
+              </button>
+              <button
+                type="button"
+                onClick={() => onChangeProfileView('pareja')}
+                className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  profileView === 'pareja'
+                    ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                Ambos
+              </button>
             </div>
 
-            {/* Right Circular Utility Icons */}
+            {/* Right Utility Icons */}
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setShowBioSheet(true)}
-                className="w-8 h-8 rounded-full apple-pill-surface flex items-center justify-center text-slate-700 dark:text-slate-200 hover:opacity-80 cursor-pointer"
-                title="Peso y Suplementos"
+                className="h-8 px-2.5 rounded-full apple-pill-surface flex items-center gap-1 text-xs font-bold text-slate-700 dark:text-slate-200 hover:opacity-80 cursor-pointer"
+                title="Peso y Creatina/Whey"
               >
-                <Scale className="w-4 h-4 text-[#30D158]" />
+                <Scale className="w-3.5 h-3.5 text-[#30D158]" />
+                <span className="hidden sm:inline">Peso</span>
               </button>
               <button
                 type="button"
                 onClick={onOpenGoogleModal}
                 className="w-8 h-8 rounded-full apple-pill-surface flex items-center justify-center text-slate-700 dark:text-slate-200 hover:opacity-80 cursor-pointer"
-                title="Sincronización Google Calendar, Sheets y Firebase"
+                title="Sincronización Nube / Google"
               >
                 <Cloud className={`w-4 h-4 ${syncActive ? 'text-[#30D158]' : 'text-[#0A84FF]'}`} />
               </button>
@@ -142,7 +169,7 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
                 type="button"
                 onClick={onToggleTheme}
                 className="w-8 h-8 rounded-full apple-pill-surface flex items-center justify-center text-slate-700 dark:text-slate-200 hover:opacity-80 cursor-pointer"
-                title="Cambiar tema"
+                title="Cambiar tema Claro / Oscuro"
               >
                 {theme === 'dark' ? (
                   <Sun className="w-4 h-4 text-[#FF9F0A]" />
@@ -153,47 +180,53 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
             </div>
           </div>
 
-          {/* Row 2: iOS Calendar Week Strip (L M X J V S D) */}
-          <div className="grid grid-cols-7 gap-1.5">
+          {/* Row 2: Compact 7-Day Strip with "HOY" indicator & Alba's shift micro-badge */}
+          <div className="grid grid-cols-7 gap-1">
             {days.map((d) => {
               const isSelected = d.day === selectedDayId;
-              const isNight = d.albaShift === 'noche';
+              const isToday = d.day === todayDayId;
               return (
                 <button
                   key={d.day}
                   type="button"
                   onClick={() => onSelectDay(d.day)}
-                  className={`py-2 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer ${
+                  className={`py-1.5 px-1 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer relative ${
                     isSelected
-                      ? 'bg-slate-900 text-white dark:bg-white dark:text-black shadow-sm scale-[1.02]'
+                      ? 'bg-slate-900 text-white dark:bg-white dark:text-black shadow-sm'
+                      : isToday
+                      ? 'bg-[#30D158]/15 text-[#30D158] border border-[#30D158]/30'
                       : 'text-slate-500 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                 >
-                  <span className="text-[11px] font-bold">{d.shortLabel}</span>
-                  <div className="flex items-center gap-1 mt-1">
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        d.guilleTraining === 'padel'
-                          ? 'bg-[#FF9F0A]'
-                          : 'bg-[#30D158]'
-                      }`}
-                    />
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        isNight ? 'bg-[#5E5CE6]' : 'bg-[#FF2D55]'
-                      }`}
-                    />
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs font-extrabold">{d.shortLabel}</span>
+                    {isToday && (
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          isSelected ? 'bg-[#30D158]' : 'bg-[#30D158]'
+                        }`}
+                      />
+                    )}
                   </div>
+                  <span
+                    className={`text-[9px] font-bold leading-tight mt-0.5 ${
+                      isSelected
+                        ? 'text-white/80 dark:text-black/75'
+                        : 'text-slate-400 dark:text-slate-500'
+                    }`}
+                  >
+                    {SHIFT_SHORT_BADGE[d.albaShift]}
+                  </span>
                 </button>
               );
             })}
           </div>
 
-          {/* Minimal 1-Line Contextual Pill (only when actionable) */}
+          {/* Actionable Alert Banner (Only when needed) */}
           {(tomorrowDefrost || hasLegPadelConflict) && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
               {tomorrowDefrost && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0A84FF]/15 text-[#0A84FF] text-xs font-medium">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0A84FF]/15 text-[#0A84FF] text-xs font-semibold">
                   <Snowflake className="w-3.5 h-3.5 shrink-0" />
                   <span>Sacar salmón hoy para mañana ({nextDay.label})</span>
                 </div>
@@ -202,10 +235,10 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
                 <button
                   type="button"
                   onClick={() => onAutoFixLegPadelConflict(currentDayIndex)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FF9F0A]/15 text-[#FF9F0A] text-xs font-semibold cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FF9F0A]/15 text-[#FF9F0A] text-xs font-bold cursor-pointer"
                 >
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  <span>Pierna pegada a Pádel · Toca para reordenar</span>
+                  <span>Pierna pegada a Pádel · Toca para separar</span>
                 </button>
               )}
             </div>
@@ -213,7 +246,7 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
         </div>
       </header>
 
-      {/* iOS Bottom Sheet for Weight & Supplements */}
+      {/* Bottom Sheet: Weight & Daily Supplements */}
       {showBioSheet && (
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -237,43 +270,41 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
               </button>
             </div>
 
-            {/* Daily Supplements Pills */}
             <div className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Checks de Hoy ({currentDay.label})
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Suplementos de Hoy ({currentDay.label})
               </span>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => onToggleSupplement(currentDay.day, 'guilleCreatine')}
-                  className={`p-3 rounded-2xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                  className={`p-3.5 rounded-2xl text-xs font-bold text-left transition-all cursor-pointer ${
                     currentDay.supplementsCheck.guilleCreatine
-                      ? 'bg-[#30D158]/20 text-[#30D158] border border-[#30D158]/40'
+                      ? 'bg-[#30D158] text-black'
                       : 'apple-pill-surface text-slate-500'
                   }`}
                 >
                   {currentDay.supplementsCheck.guilleCreatine ? '✓ ' : '○ '}
-                  Creatina 5g (Guille)
+                  Creatina 5g
                 </button>
                 <button
                   type="button"
                   onClick={() => onToggleSupplement(currentDay.day, 'guilleWhey')}
-                  className={`p-3 rounded-2xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                  className={`p-3.5 rounded-2xl text-xs font-bold text-left transition-all cursor-pointer ${
                     currentDay.supplementsCheck.guilleWhey
-                      ? 'bg-[#30D158]/20 text-[#30D158] border border-[#30D158]/40'
+                      ? 'bg-[#30D158] text-black'
                       : 'apple-pill-surface text-slate-500'
                   }`}
                 >
                   {currentDay.supplementsCheck.guilleWhey ? '✓ ' : '○ '}
-                  Whey Proteína (Guille)
+                  Whey Proteína
                 </button>
               </div>
             </div>
 
-            {/* Weight History */}
             <div className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Evolución Semanal
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Evolución de Peso
               </span>
               <div className="space-y-1.5 max-h-40 overflow-y-auto">
                 {weightLogs.map((w) => (
@@ -281,12 +312,12 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
                     key={w.id}
                     className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-slate-100 dark:bg-[#2C2C2E] text-xs"
                   >
-                    <span className="font-medium text-slate-500 dark:text-slate-400">
+                    <span className="font-semibold text-slate-500 dark:text-slate-400">
                       {w.weekLabel} · {w.date}
                     </span>
                     <div className="flex gap-3 font-bold">
-                      <span className="text-[#30D158]">{w.guilleWeightKg.toFixed(1)} kg</span>
-                      <span className="text-[#FF2D55]">{w.albaWeightKg.toFixed(1)} kg</span>
+                      <span className="text-[#30D158]">🟢 {w.guilleWeightKg.toFixed(1)} kg</span>
+                      <span className="text-[#FF2D55]">🔴 {w.albaWeightKg.toFixed(1)} kg</span>
                     </div>
                   </div>
                 ))}
@@ -313,7 +344,7 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
                   type="submit"
                   className="px-3 py-2.5 rounded-2xl text-xs font-bold bg-[#30D158] text-black cursor-pointer"
                 >
-                  Registrar
+                  Guardar
                 </button>
               </form>
             </div>

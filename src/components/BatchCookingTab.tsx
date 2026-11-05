@@ -9,8 +9,10 @@ import {
 } from '../data/batchCooking';
 import {
   Check,
+  Minus,
   Pause,
   Play,
+  Plus,
 } from 'lucide-react';
 
 interface BatchCookingTabProps {
@@ -75,20 +77,24 @@ export const BatchCookingTab: React.FC<BatchCookingTabProps> = ({
 
   const batchSummary = calculateWeeklyBatchSummary(days);
   const completedCount = BATCH_COOKING_STEPS.filter((s) => completedStepIds[s.id]).length;
+  const activeStepIndex = BATCH_COOKING_STEPS.findIndex((s) => !completedStepIds[s.id]);
+  const activeStep = activeStepIndex >= 0 ? BATCH_COOKING_STEPS[activeStepIndex] : null;
 
-  const guillePerTupper = potDaysCount > 0 ? Math.round((potCookedWeightG * 0.58) / potDaysCount) : 0;
-  const albaPerTupper = potDaysCount > 0 ? Math.round((potCookedWeightG * 0.42) / potDaysCount) : 0;
+  const guillePerTupper =
+    potDaysCount > 0 ? Math.round((potCookedWeightG * 0.58) / potDaysCount) : 0;
+  const albaPerTupper =
+    potDaysCount > 0 ? Math.round((potCookedWeightG * 0.42) / potDaysCount) : 0;
 
   return (
-    <div className="space-y-5">
-      {/* Top Apple Segmented Control */}
+    <div className="space-y-4">
+      {/* Top Segmented Control */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Batch Cooking
+          <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            Cocina de Domingo (60 min)
           </h2>
-          <p className="text-xs text-slate-400">
-            {completedCount} de {BATCH_COOKING_STEPS.length} pasos completados
+          <p className="text-xs font-semibold text-slate-400">
+            {completedCount} de {BATCH_COOKING_STEPS.length} pasos hechos
           </p>
         </div>
 
@@ -96,18 +102,18 @@ export const BatchCookingTab: React.FC<BatchCookingTabProps> = ({
           <button
             type="button"
             onClick={() => setSubTab('pasos')}
-            className={`px-3.5 py-1.5 rounded-full font-semibold cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-full font-extrabold cursor-pointer ${
               subTab === 'pasos'
                 ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
                 : 'text-slate-500'
             }`}
           >
-            ⏱️ Paso a Paso
+            ⏱️ Guiado
           </button>
           <button
             type="button"
             onClick={() => setSubTab('tuppers')}
-            className={`px-3.5 py-1.5 rounded-full font-semibold cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-full font-extrabold cursor-pointer ${
               subTab === 'tuppers'
                 ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
                 : 'text-slate-500'
@@ -118,137 +124,182 @@ export const BatchCookingTab: React.FC<BatchCookingTabProps> = ({
           <button
             type="button"
             onClick={() => setSubTab('bascula')}
-            className={`px-3.5 py-1.5 rounded-full font-semibold cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-full font-extrabold cursor-pointer ${
               subTab === 'bascula'
                 ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
                 : 'text-slate-500'
             }`}
           >
-            ⚖️ Calculadora
+            ⚖️ Repartir Olla
           </button>
         </div>
       </div>
 
-      {/* SUB-TAB 1: PASO A PASO PARALELO */}
+      {/* ========================================================= */}
+      {/* SUB-TAB 1: MODO GUIADO DE COCINA (1 HERO CARD AT TOP)     */}
+      {/* ========================================================= */}
       {subTab === 'pasos' && (
-        <div className="space-y-3">
-          {BATCH_COOKING_STEPS.map((step) => {
-            const done = Boolean(completedStepIds[step.id]);
-            const tr = TRACK_LABELS[step.track];
-            const timer = stepTimers[step.id] || {
-              remainingSec: step.durationTimerSec,
-              running: false,
-            };
-
-            return (
-              <div
-                key={step.id}
-                className={`apple-card rounded-3xl p-4 sm:p-5 flex items-center justify-between gap-4 transition-opacity ${
-                  done ? 'opacity-50' : ''
-                }`}
-              >
-                <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                  <button
-                    type="button"
-                    onClick={() => onToggleStepCompleted(step.id)}
-                    className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 cursor-pointer transition-all ${
-                      done
-                        ? 'bg-[#30D158] text-black'
-                        : 'border-2 border-slate-300 dark:border-slate-600'
+        <div className="space-y-4">
+          {/* HERO CARD: CURRENT STEP IN LARGE PRINT */}
+          {activeStep ? (
+            <div className="apple-card rounded-3xl p-5 sm:p-6 ring-2 ring-[#30D158] space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-full text-xs font-black uppercase bg-[#30D158] text-black">
+                    Paso {activeStepIndex + 1} de {BATCH_COOKING_STEPS.length}
+                  </span>
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-extrabold ${
+                      TRACK_LABELS[activeStep.track].color
                     }`}
                   >
-                    {done && <Check className="w-4 h-4" />}
-                  </button>
-
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-slate-400">
-                        Min {step.minuteStart}–{step.minuteEnd}
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${tr.color}`}
-                      >
-                        {tr.emoji} {tr.label}
-                      </span>
-                    </div>
-
-                    <h3
-                      className={`text-sm sm:text-base font-bold ${
-                        done
-                          ? 'line-through text-slate-400'
-                          : 'text-slate-900 dark:text-white'
-                      }`}
-                    >
-                      {step.title}
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                      {step.description}
-                    </p>
-                  </div>
+                    {TRACK_LABELS[activeStep.track].emoji}{' '}
+                    {TRACK_LABELS[activeStep.track].label}
+                  </span>
                 </div>
-
-                {/* Apple Circular Timer Pill */}
-                <button
-                  type="button"
-                  onClick={() => toggleTimer(step.id, step.durationTimerSec)}
-                  className={`px-3.5 py-2 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    timer.running
-                      ? 'bg-[#30D158] text-black'
-                      : 'apple-pill-surface text-slate-700 dark:text-white'
-                  }`}
-                >
-                  {timer.running ? (
-                    <Pause className="w-3.5 h-3.5" />
-                  ) : (
-                    <Play className="w-3.5 h-3.5" />
-                  )}
-                  <span>{formatSec(timer.remainingSec)}</span>
-                </button>
-              </div>
-            );
-          })}
-
-          {completedCount > 0 && (
-            <button
-              type="button"
-              onClick={onResetBatchSteps}
-              className="w-full py-3 rounded-2xl text-xs font-bold text-slate-400 hover:text-slate-200 cursor-pointer"
-            >
-              Reiniciar pasos de la semana
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* SUB-TAB 2: REPARTO EN TUPPERS */}
-      {subTab === 'tuppers' && (
-        <div className="space-y-3">
-          {batchSummary.map((item) => (
-            <div key={item.recipeId} className="apple-card rounded-3xl p-5 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  {item.recipeTitle}
-                </h3>
-                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-[#30D158]/15 text-[#30D158]">
-                  {item.occurrencesCount} días
+                <span className="text-xs font-bold text-slate-400">
+                  Min {activeStep.minuteStart}–{activeStep.minuteEnd}
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-                <div className="p-3.5 rounded-2xl bg-[#30D158]/10 space-y-0.5">
-                  <span className="font-bold text-[#30D158] block">
-                    🟢 Tupper Guille: ~{item.guilleCookedPerTupperG}g cocinados
+              <div>
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                  {activeStep.title}
+                </h3>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                  {activeStep.description}
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => toggleTimer(activeStep.id, activeStep.durationTimerSec)}
+                  className="px-5 py-3.5 rounded-2xl text-sm font-mono font-black apple-pill-surface flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {stepTimers[activeStep.id]?.running ? (
+                    <Pause className="w-4 h-4 text-[#30D158]" />
+                  ) : (
+                    <Play className="w-4 h-4 text-[#30D158]" />
+                  )}
+                  <span>
+                    Cronómetro:{' '}
+                    {formatSec(
+                      stepTimers[activeStep.id]?.remainingSec ??
+                        activeStep.durationTimerSec
+                    )}
                   </span>
-                  <span className="text-slate-500 dark:text-slate-400">
-                    {item.guilleRawPerMealSummary}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onToggleStepCompleted(activeStep.id)}
+                  className="flex-1 py-3.5 px-5 rounded-2xl text-sm font-black bg-[#30D158] text-black flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Hecho · Pasar al siguiente paso</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="apple-card rounded-3xl p-6 text-center space-y-3">
+              <div className="text-3xl">🎉</div>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                ¡Batch Cooking Completado!
+              </h3>
+              <button
+                type="button"
+                onClick={onResetBatchSteps}
+                className="px-4 py-2 rounded-full text-xs font-extrabold apple-pill-surface cursor-pointer"
+              >
+                Reiniciar pasos
+              </button>
+            </div>
+          )}
+
+          {/* Compact Checklist of All Steps */}
+          <div className="apple-card rounded-3xl divide-y divide-black/5 dark:divide-white/5 overflow-hidden">
+            {BATCH_COOKING_STEPS.map((step, idx) => {
+              const done = Boolean(completedStepIds[step.id]);
+              const tr = TRACK_LABELS[step.track];
+              return (
+                <div
+                  key={step.id}
+                  onClick={() => onToggleStepCompleted(step.id)}
+                  className={`p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer transition-opacity ${
+                    done ? 'opacity-45' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                        done
+                          ? 'bg-[#30D158] text-black'
+                          : 'border-2 border-slate-300 dark:border-slate-600 text-slate-400'
+                      }`}
+                    >
+                      {done ? <Check className="w-3.5 h-3.5" /> : idx + 1}
+                    </div>
+                    <div className="min-w-0">
+                      <span
+                        className={`text-sm font-bold block truncate ${
+                          done
+                            ? 'line-through text-slate-400'
+                            : 'text-slate-900 dark:text-white'
+                        }`}
+                      >
+                        {step.title}
+                      </span>
+                      <span className="text-[11px] font-semibold text-slate-400">
+                        {tr.emoji} {tr.label} · Min {step.minuteStart}–{step.minuteEnd}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* SUB-TAB 2: VISUAL TUPPER PORTIONS                         */}
+      {/* ========================================================= */}
+      {subTab === 'tuppers' && (
+        <div className="space-y-3">
+          {batchSummary.map((item) => (
+            <div key={item.recipeId} className="apple-card rounded-3xl p-5 space-y-3.5">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
+                  {item.recipeTitle}
+                </h3>
+                <span className="px-3 py-1 rounded-full text-xs font-black bg-[#30D158]/15 text-[#30D158] shrink-0">
+                  🥡 × {item.occurrencesCount} comidas
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-2xl bg-[#30D158]/10 border border-[#30D158]/25">
+                  <span className="text-xs font-extrabold uppercase text-[#30D158] block">
+                    🟢 Tupper Guille
+                  </span>
+                  <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+                    {item.guilleCookedPerTupperG}g
+                  </span>
+                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block mt-1">
+                    Crudo: {item.guilleRawPerMealSummary}
                   </span>
                 </div>
-                <div className="p-3.5 rounded-2xl bg-[#FF2D55]/10 space-y-0.5">
-                  <span className="font-bold text-[#FF2D55] block">
-                    🔴 Tupper Alba: ~{item.albaCookedPerTupperG}g cocinados
+
+                <div className="p-4 rounded-2xl bg-[#FF2D55]/10 border border-[#FF2D55]/25">
+                  <span className="text-xs font-extrabold uppercase text-[#FF2D55] block">
+                    🔴 Tupper Alba
                   </span>
-                  <span className="text-slate-500 dark:text-slate-400">
-                    {item.albaRawPerMealSummary}
+                  <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+                    {item.albaCookedPerTupperG}g
+                  </span>
+                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block mt-1">
+                    Crudo: {item.albaRawPerMealSummary}
                   </span>
                 </div>
               </div>
@@ -257,56 +308,87 @@ export const BatchCookingTab: React.FC<BatchCookingTabProps> = ({
         </div>
       )}
 
-      {/* SUB-TAB 3: CALCULADORA DE OLLA */}
+      {/* ========================================================= */}
+      {/* SUB-TAB 3: ZERO-KEYBOARD POT DIVIDER                      */}
+      {/* ========================================================= */}
       {subTab === 'bascula' && (
         <div className="apple-card rounded-3xl p-6 max-w-md mx-auto space-y-5">
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+            <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
               Divisor de Olla en Báscula
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Pesa el total cocinado (arroz, pasta o carne) y te dice cuánto poner en cada tupper.
+            <p className="text-xs font-medium text-slate-400 mt-0.5">
+              Pesa la olla ya cocinada y reparte exacto entre Guille (58%) y Alba (42%).
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-4 rounded-2xl bg-slate-100 dark:bg-[#2C2C2E]">
-              <span className="text-xs text-slate-400 block">Peso total olla (g)</span>
-              <input
-                type="number"
-                value={potCookedWeightG}
-                onChange={(e) => setPotCookedWeightG(Number(e.target.value) || 0)}
-                className="w-full bg-transparent text-2xl font-black mt-1 outline-none"
-              />
+          <div className="space-y-3">
+            <div className="p-4 rounded-2xl bg-slate-100 dark:bg-[#2C2C2E] flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-slate-400 block">
+                  Peso total cocinado
+                </span>
+                <span className="text-2xl font-black">{potCookedWeightG} g</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPotCookedWeightG((w) => Math.max(100, w - 50))}
+                  className="w-10 h-10 rounded-xl apple-pill-surface flex items-center justify-center cursor-pointer"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPotCookedWeightG((w) => w + 50)}
+                  className="w-10 h-10 rounded-xl apple-pill-surface flex items-center justify-center cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <div className="p-4 rounded-2xl bg-slate-100 dark:bg-[#2C2C2E]">
-              <span className="text-xs text-slate-400 block">Nº de comidas</span>
-              <input
-                type="number"
-                min={1}
-                max={7}
-                value={potDaysCount}
-                onChange={(e) => setPotDaysCount(Number(e.target.value) || 1)}
-                className="w-full bg-transparent text-2xl font-black mt-1 outline-none"
-              />
+
+            <div className="p-4 rounded-2xl bg-slate-100 dark:bg-[#2C2C2E] flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-slate-400 block">
+                  Nº de días / comidas
+                </span>
+                <span className="text-2xl font-black">{potDaysCount} días</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPotDaysCount((d) => Math.max(1, d - 1))}
+                  className="w-10 h-10 rounded-xl apple-pill-surface flex items-center justify-center cursor-pointer"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPotDaysCount((d) => Math.min(7, d + 1))}
+                  className="w-10 h-10 rounded-xl apple-pill-surface flex items-center justify-center cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-[#30D158]/15">
-              <span className="text-sm font-bold text-[#30D158]">
-                En cada tupper de Guille
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-4 rounded-2xl bg-[#30D158]/15 border border-[#30D158]/30 text-center">
+              <span className="text-xs font-extrabold text-[#30D158] block">
+                🟢 Cada tupper Guille
               </span>
-              <span className="text-xl font-black text-[#30D158]">
-                {guillePerTupper} g
+              <span className="text-3xl font-black text-[#30D158] block mt-1">
+                {guillePerTupper}g
               </span>
             </div>
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-[#FF2D55]/15">
-              <span className="text-sm font-bold text-[#FF2D55]">
-                En cada tupper de Alba
+            <div className="p-4 rounded-2xl bg-[#FF2D55]/15 border border-[#FF2D55]/30 text-center">
+              <span className="text-xs font-extrabold text-[#FF2D55] block">
+                🔴 Cada tupper Alba
               </span>
-              <span className="text-xl font-black text-[#FF2D55]">
-                {albaPerTupper} g
+              <span className="text-3xl font-black text-[#FF2D55] block mt-1">
+                {albaPerTupper}g
               </span>
             </div>
           </div>

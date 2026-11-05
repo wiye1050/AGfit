@@ -4,10 +4,7 @@ import {
   DayPlan,
   ShoppingAisle,
 } from '../types';
-import {
-  AISLE_META,
-  aggregateWeeklyShoppingList,
-} from '../utils/shoppingEngine';
+import { aggregateWeeklyShoppingList } from '../utils/shoppingEngine';
 import {
   Check,
   Home,
@@ -90,15 +87,15 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Top Header + Segmented View Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Lista de la Compra
+          <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            Lista del Súper
           </h2>
-          <p className="text-xs text-slate-400">
-            {pendingCount} pendientes · {inCartCount} en el carro · {inPantryCount} en casa
+          <p className="text-xs font-semibold text-slate-400">
+            Toca cualquier fila para tacharla al meterla al carro
           </p>
         </div>
 
@@ -107,18 +104,18 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
             <button
               type="button"
               onClick={() => setFilterMode('pendientes')}
-              className={`px-3.5 py-1.5 rounded-full font-semibold cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-full font-extrabold cursor-pointer ${
                 filterMode === 'pendientes'
                   ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-500'
               }`}
             >
-              Para Comprar ({pendingCount})
+              Comprar ({pendingCount})
             </button>
             <button
               type="button"
               onClick={() => setFilterMode('despensa')}
-              className={`px-3.5 py-1.5 rounded-full font-semibold cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-full font-extrabold cursor-pointer ${
                 filterMode === 'despensa'
                   ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-500'
@@ -129,7 +126,7 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
             <button
               type="button"
               onClick={() => setFilterMode('todos')}
-              className={`px-3.5 py-1.5 rounded-full font-semibold cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-full font-extrabold cursor-pointer ${
                 filterMode === 'todos'
                   ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-500'
@@ -144,7 +141,7 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
               type="button"
               onClick={onResetShoppingChecks}
               className="w-8 h-8 rounded-full apple-pill-surface flex items-center justify-center text-slate-400 hover:text-white cursor-pointer"
-              title="Vaciar carro"
+              title="Reiniciar carro"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -152,7 +149,7 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
         </div>
       </div>
 
-      {/* Minimalist iOS Add Reminder Bar */}
+      {/* Quick Add Bar */}
       <form onSubmit={handleQuickAdd} className="apple-card rounded-2xl p-2 flex items-center gap-2">
         <div className="w-8 h-8 rounded-full bg-[#30D158]/15 text-[#30D158] flex items-center justify-center shrink-0 ml-1">
           <Plus className="w-4 h-4" />
@@ -161,20 +158,20 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
           type="text"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder="Añadir artículo a la lista (ej. Cápsulas café, papel cocina...)"
-          className="flex-1 bg-transparent text-sm font-medium outline-none px-1"
+          placeholder="Añadir extra (ej. Papel cocina, café, jabón...)"
+          className="flex-1 bg-transparent text-sm font-semibold outline-none px-1"
         />
         {newName.trim() && (
           <button
             type="submit"
-            className="px-4 py-1.5 rounded-full text-xs font-bold bg-[#30D158] text-black cursor-pointer mr-1"
+            className="px-4 py-1.5 rounded-full text-xs font-black bg-[#30D158] text-black cursor-pointer mr-1"
           >
             Añadir
           </button>
         )}
       </form>
 
-      {/* iOS Reminders Inset Grouped Lists by Aisle */}
+      {/* 1-Handed Full-Row Tap Lists by Aisle */}
       <div className="space-y-5">
         {AISLE_ORDER.map((aisle) => {
           const aisleMenuItems = menuItems.filter((item) => {
@@ -199,7 +196,7 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
 
           return (
             <div key={aisle} className="space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 px-2">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 px-2">
                 {AISLE_CLEAN_LABELS[aisle]}
               </h3>
 
@@ -215,25 +212,23 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
                   return (
                     <div
                       key={item.id}
-                      className="px-4 py-3.5 flex items-center justify-between gap-3"
+                      onClick={() => onToggleCartItem(item.id)}
+                      className="px-4 py-3.5 flex items-center justify-between gap-3 cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:scale-[0.995] transition-all"
                     >
                       <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                        {/* iOS Reminder Circle Check (Cart) */}
-                        <button
-                          type="button"
-                          onClick={() => onToggleCartItem(item.id)}
-                          className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer ${
+                        <div
+                          className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all ${
                             inCart
                               ? 'bg-[#30D158] text-black'
-                              : 'border-2 border-slate-300 dark:border-slate-600 hover:border-[#30D158]'
+                              : 'border-2 border-slate-300 dark:border-slate-600'
                           }`}
                         >
-                          {inCart && <Check className="w-3.5 h-3.5" />}
-                        </button>
+                          {inCart && <Check className="w-4 h-4" />}
+                        </div>
 
                         <div className="min-w-0">
                           <span
-                            className={`text-sm font-semibold block truncate ${
+                            className={`text-sm sm:text-base font-extrabold block truncate ${
                               inCart || inPantry
                                 ? 'line-through text-slate-400'
                                 : 'text-slate-900 dark:text-white'
@@ -241,28 +236,31 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
                           >
                             {item.name}
                           </span>
-                          <span className="text-[11px] text-slate-400">
-                            Neto menú: {item.totalNetRaw} {item.unit}
+                          <span className="text-xs font-semibold text-slate-400">
+                            Menú: {item.totalNetRaw} {item.unit}
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <span className="text-xs font-bold text-[#30D158]">
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="px-3 py-1.5 rounded-xl text-xs sm:text-sm font-black bg-[#30D158]/15 text-[#30D158]">
                           {shortBuyText}
                         </span>
 
                         <button
                           type="button"
-                          onClick={() => onTogglePantryItem(item.id)}
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs transition-all cursor-pointer ${
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onTogglePantryItem(item.id);
+                          }}
+                          className={`w-9 h-9 rounded-full flex items-center justify-center text-xs transition-all cursor-pointer ${
                             inPantry
                               ? 'bg-[#FF9F0A] text-black'
                               : 'apple-pill-surface text-slate-400 hover:text-white'
                           }`}
-                          title="Ya lo tenemos en casa / despensa"
+                          title="Marcar que ya hay en casa"
                         >
-                          <Home className="w-3.5 h-3.5" />
+                          <Home className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -272,22 +270,21 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
                 {aisleCustomItems.map((c) => (
                   <div
                     key={c.id}
-                    className="px-4 py-3.5 flex items-center justify-between gap-3"
+                    onClick={() => onToggleCustomItemCart(c.id)}
+                    className="px-4 py-3.5 flex items-center justify-between gap-3 cursor-pointer"
                   >
                     <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                      <button
-                        type="button"
-                        onClick={() => onToggleCustomItemCart(c.id)}
-                        className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 cursor-pointer ${
+                      <div
+                        className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
                           c.inCart
                             ? 'bg-[#30D158] text-black'
                             : 'border-2 border-slate-300 dark:border-slate-600'
                         }`}
                       >
-                        {c.inCart && <Check className="w-3.5 h-3.5" />}
-                      </button>
+                        {c.inCart && <Check className="w-4 h-4" />}
+                      </div>
                       <span
-                        className={`text-sm font-semibold truncate ${
+                        className={`text-sm sm:text-base font-extrabold truncate ${
                           c.inCart || c.inPantry
                             ? 'line-through text-slate-400'
                             : 'text-slate-900 dark:text-white'
@@ -300,21 +297,27 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => onToggleCustomItemPantry(c.id)}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer ${
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleCustomItemPantry(c.id);
+                        }}
+                        className={`w-9 h-9 rounded-full flex items-center justify-center cursor-pointer ${
                           c.inPantry
                             ? 'bg-[#FF9F0A] text-black'
                             : 'apple-pill-surface text-slate-400'
                         }`}
                       >
-                        <Home className="w-3.5 h-3.5" />
+                        <Home className="w-4 h-4" />
                       </button>
                       <button
                         type="button"
-                        onClick={() => onDeleteCustomItem(c.id)}
-                        className="w-8 h-8 rounded-full apple-pill-surface flex items-center justify-center text-slate-400 hover:text-[#FF2D55] cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteCustomItem(c.id);
+                        }}
+                        className="w-9 h-9 rounded-full apple-pill-surface flex items-center justify-center text-slate-400 hover:text-[#FF2D55] cursor-pointer"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>

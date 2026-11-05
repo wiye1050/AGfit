@@ -44,7 +44,21 @@ import {
 
 type MainTab = 'menu' | 'entreno' | 'batch' | 'compra';
 
-const STORAGE_KEY = 'agfit_oviedo_apple_v2';
+const STORAGE_KEY = 'agfit_oviedo_v3';
+
+function getTodayDayId(): DayId {
+  const jsDay = new Date().getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const map: Record<number, DayId> = {
+    1: 'lunes',
+    2: 'martes',
+    3: 'miercoles',
+    4: 'jueves',
+    5: 'viernes',
+    6: 'sabado',
+    0: 'domingo',
+  };
+  return map[jsDay] || 'lunes';
+}
 
 const INITIAL_WEIGHT_LOGS: WeightEntry[] = [
   { id: 'w_1', weekLabel: 'Sem 1', date: '22 Oct', guilleWeightKg: 85.0, albaWeightKg: 53.0 },
@@ -64,10 +78,11 @@ const INITIAL_GOOGLE_CONFIG: GoogleIntegrationConfig = {
 };
 
 export function App() {
+  const todayDayId = getTodayDayId();
   const [activeTab, setActiveTab] = useState<MainTab>('menu');
   const [theme, setTheme] = useState<ThemeMode>('dark');
   const [profileView, setProfileView] = useState<ProfileView>('pareja');
-  const [selectedDayId, setSelectedDayId] = useState<DayId>('lunes');
+  const [selectedDayId, setSelectedDayId] = useState<DayId>(todayDayId);
   const [activeTemplateKey, setActiveTemplateKey] = useState<'semana_a' | 'semana_b' | 'semana_c'>('semana_a');
 
   const [days, setDays] = useState<DayPlan[]>(() => WEEK_TEMPLATES.semana_a.days);
@@ -306,6 +321,7 @@ export function App() {
       <TodayHeader
         days={days}
         selectedDayId={selectedDayId}
+        todayDayId={todayDayId}
         onSelectDay={setSelectedDayId}
         profileView={profileView}
         onChangeProfileView={setProfileView}
@@ -330,7 +346,7 @@ export function App() {
         syncActive={googleConfig.syncEnabled}
       />
 
-      <main className="max-w-4xl mx-auto px-4 pt-5">
+      <main className="max-w-3xl mx-auto px-4 pt-4">
         {activeTab === 'menu' && (
           <WeeklyMenuTab
             days={days}
@@ -349,6 +365,7 @@ export function App() {
         {activeTab === 'entreno' && (
           <PersonalTrainerTab
             selectedDay={currentSelectedDay}
+            profileView={profileView}
             onSyncTrainingToDay={handleSyncTrainingToDay}
             setProgressMap={setProgressMap}
             onUpdateSetProgress={handleUpdateSetProgress}
@@ -432,7 +449,7 @@ export function App() {
       {/* Apple-Style Floating Frosted Bottom Dock */}
       <nav
         aria-label="Navegación principal"
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white/85 dark:bg-[#1C1C1E]/90 backdrop-blur-2xl border border-black/10 dark:border-white/15 rounded-full px-3 py-1.5 shadow-2xl flex items-center gap-1 sm:gap-2 no-print"
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white/90 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl border border-black/10 dark:border-white/15 rounded-full px-3 py-1.5 shadow-2xl flex items-center gap-1 sm:gap-2 no-print"
       >
         {TABS.map((tab) => {
           const active = activeTab === tab.id;
@@ -441,7 +458,7 @@ export function App() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-full flex items-center gap-2 text-xs font-bold transition-all cursor-pointer ${
+              className={`px-4 py-2 rounded-full flex items-center gap-2 text-xs font-extrabold transition-all cursor-pointer ${
                 active
                   ? 'bg-[#30D158] text-black shadow-sm'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
