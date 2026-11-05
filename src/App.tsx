@@ -1,19 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  AlbaShift,
   CustomShoppingItem,
   DayId,
   DayPlan,
-  ExerciseItem,
   GoogleIntegrationConfig,
-  GuilleShift,
   PadelMatchLog,
-  ProfileView,
   Recipe,
   RunningLog,
   SetProgress,
   ThemeMode,
-  TrainingType,
   UserTrainingHistoryEntry,
   WeightEntry,
 } from './types';
@@ -24,30 +19,23 @@ import {
   INITIAL_TRAINING_HISTORY,
 } from './data/workouts';
 import { TodayHeader } from './components/TodayHeader';
+import { HomeTab } from './components/HomeTab';
 import { WeeklyMenuTab } from './components/WeeklyMenuTab';
 import { PersonalTrainerTab } from './components/PersonalTrainerTab';
 import { BatchCookingTab } from './components/BatchCookingTab';
 import { ShoppingListTab } from './components/ShoppingListTab';
-import { GoogleEcosystemModal } from './components/GoogleEcosystemModal';
 import {
-  exportWeeklyMenuAndShoppingToSheetsCsv,
   pushHouseholdRealtime,
   subscribeHouseholdRealtime,
 } from './services/googleEcosystem';
-import { aggregateWeeklyShoppingList } from './utils/shoppingEngine';
-import {
-  Calendar,
-  ChefHat,
-  Dumbbell,
-  ShoppingCart,
-} from 'lucide-react';
 
-type MainTab = 'menu' | 'entreno' | 'batch' | 'compra';
+type MainTab = 'inicio' | 'menu' | 'entreno' | 'batch' | 'compra';
 
 const STORAGE_KEY = 'agfit_oviedo_v3';
+const USER_STORAGE_KEY = 'agfit_device_user';
 
 function getTodayDayId(): DayId {
-  const jsDay = new Date().getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const jsDay = new Date().getDay();
   const map: Record<number, DayId> = {
     1: 'lunes',
     2: 'martes',
@@ -79,21 +67,27 @@ const INITIAL_GOOGLE_CONFIG: GoogleIntegrationConfig = {
 
 export function App() {
   const todayDayId = getTodayDayId();
-  const [activeTab, setActiveTab] = useState<MainTab>('menu');
+  const [activeUser, setActiveUser] = useState<'guille' | 'alba' | null>(() => {
+    try {
+      const saved = localStorage.getItem(USER_STORAGE_KEY);
+      if (saved === 'guille' || saved === 'alba') return saved;
+    } catch {
+      // ignore
+    }
+    return null;
+  });
+
+  const [activeTab, setActiveTab] = useState<MainTab>('inicio');
   const [theme, setTheme] = useState<ThemeMode>('dark');
-  const [profileView, setProfileView] = useState<ProfileView>('pareja');
   const [selectedDayId, setSelectedDayId] = useState<DayId>(todayDayId);
   const [activeTemplateKey, setActiveTemplateKey] = useState<'semana_a' | 'semana_b' | 'semana_c'>('semana_a');
 
   const [days, setDays] = useState<DayPlan[]>(() => WEEK_TEMPLATES.semana_a.days);
-  const [customRecipes, setCustomRecipes] = useState<Recipe[]>([]);
+  const [customRecipes] = useState<Recipe[]>([]);
   const [weightLogs, setWeightLogs] = useState<WeightEntry[]>(INITIAL_WEIGHT_LOGS);
 
   const [setProgressMap, setSetProgressMap] = useState<Record<string, SetProgress[]>>({});
   const [swappedExerciseMap, setSwappedExerciseMap] = useState<Record<string, number>>({});
-  const [customExercisesBySession, setCustomExercisesBySession] = useState<
-    Record<string, ExerciseItem[]>
-  >({});
   const [padelLogs, setPadelLogs] = useState<PadelMatchLog[]>(INITIAL_PADEL_LOGS);
   const [runningLogs, setRunningLogs] = useState<RunningLog[]>(INITIAL_RUNNING_LOGS);
   const [trainingHistory, setTrainingHistory] = useState<UserTrainingHistoryEntry[]>(
@@ -120,15 +114,21 @@ export function App() {
   ]);
 
   const [googleConfig, setGoogleConfig] = useState<GoogleIntegrationConfig>(INITIAL_GOOGLE_CONFIG);
-  const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [cloudConnected, setCloudConnected] = useState(false);
 
-  // Refs to prevent initial overwrite or infinite snapshot ping-pong
   const clientIdRef = useRef<string>(`client_${Math.random().toString(36).slice(2, 10)}`);
   const cloudHydratedRef = useRef<boolean>(false);
   const isApplyingRemoteRef = useRef<boolean>(false);
 
-  // 1. Load local fallback cache first
+  const handleSelectUser = (user: 'guille' | 'alba') => {
+    setActiveUser(user);
+    try {
+      localStorage.setItem(USER_STORAGE_KEY, user);
+    } catch {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -136,7 +136,6 @@ export function App() {
       const parsed = JSON.parse(raw);
       if (parsed.days) setDays(parsed.days);
       if (parsed.theme) setTheme(parsed.theme);
-      if (parsed.customRecipes) setCustomRecipes(parsed.customRecipes);
       if (parsed.weightLogs) setWeightLogs(parsed.weightLogs);
       if (parsed.setProgressMap) setSetProgressMap(parsed.setProgressMap);
       if (parsed.swappedExerciseMap) setSwappedExerciseMap(parsed.swappedExerciseMap);
@@ -168,13 +167,11 @@ export function App() {
     }
   }, [theme]);
 
-  // 2. Real-time Firestore subscription (Hydrates first before allowing writes)
   useEffect(() => {
     const unsub = subscribeHouseholdRealtime(
       googleConfig,
       (exists, remote) => {
         if (!exists || !remote) {
-          // Document doesn't exist in Firestore yet -> seed it with our current state!
           cloudHydratedRef.current = true;
           pushHouseholdRealtime(googleConfig, {
             days,
@@ -194,7 +191,6 @@ export function App() {
           return;
         }
 
-        // Ignore our own echo snapshot
         if (remote.lastSyncAt === clientIdRef.current && cloudHydratedRef.current) {
           return;
         }
@@ -203,18 +199,12 @@ export function App() {
         cloudHydratedRef.current = true;
 
         if (Array.isArray(remote.days)) setDays(remote.days as DayPlan[]);
-        if (Array.isArray(remote.customRecipes)) setCustomRecipes(remote.customRecipes as Recipe[]);
         if (Array.isArray(remote.weightLogs)) setWeightLogs(remote.weightLogs as WeightEntry[]);
         if (remote.setProgressMap) {
           setSetProgressMap(remote.setProgressMap as Record<string, SetProgress[]>);
         }
         if (remote.swappedExerciseMap) {
           setSwappedExerciseMap(remote.swappedExerciseMap as Record<string, number>);
-        }
-        if (Array.isArray(remote.padelLogs)) setPadelLogs(remote.padelLogs as PadelMatchLog[]);
-        if (Array.isArray(remote.runningLogs)) setRunningLogs(remote.runningLogs as RunningLog[]);
-        if (Array.isArray(remote.trainingHistory)) {
-          setTrainingHistory(remote.trainingHistory as UserTrainingHistoryEntry[]);
         }
         if (remote.completedBatchSteps) {
           setCompletedBatchSteps(remote.completedBatchSteps as Record<string, boolean>);
@@ -240,7 +230,6 @@ export function App() {
     };
   }, [googleConfig.syncEnabled, googleConfig.firebaseProjectId, googleConfig.firebaseApiKey]);
 
-  // 3. Save to localStorage + push to Cloud Firestore on user changes
   useEffect(() => {
     const payload = {
       theme,
@@ -299,65 +288,6 @@ export function App() {
     setDays(WEEK_TEMPLATES[key].days);
   };
 
-  const handleBatchUpdateShifts = (
-    albaShifts: AlbaShift[] | null,
-    guilleShifts: GuilleShift[] | null
-  ) => {
-    setDays((prev) =>
-      prev.map((d, idx) => ({
-        ...d,
-        albaShift: albaShifts && albaShifts[idx] ? albaShifts[idx] : d.albaShift,
-        guilleShift: guilleShifts && guilleShifts[idx] ? guilleShifts[idx] : d.guilleShift,
-      }))
-    );
-  };
-
-  const handleAutoFixLegPadelConflict = (dayIndex: number) => {
-    setDays((prev) => {
-      const copy = [...prev];
-      const curr = copy[dayIndex];
-      if (curr.guilleTraining === 'pierna') {
-        const swapIdx = copy.findIndex(
-          (d, i) =>
-            i !== dayIndex &&
-            (d.guilleTraining === 'empuje' || d.guilleTraining === 'tiron')
-        );
-        if (swapIdx >= 0) {
-          const otherTrain = copy[swapIdx].guilleTraining;
-          copy[swapIdx] = { ...copy[swapIdx], guilleTraining: 'pierna' };
-          copy[dayIndex] = { ...curr, guilleTraining: otherTrain };
-        } else {
-          copy[dayIndex] = { ...curr, guilleTraining: 'empuje' };
-        }
-      }
-      return copy;
-    });
-  };
-
-  const handleSyncTrainingToDay = (
-    dayId: DayId,
-    athlete: 'guille' | 'alba',
-    training: TrainingType,
-    extraClass?: string,
-    customAct?: { name: string; durationMin: number; intensity: 'suave' | 'media' | 'alta' }
-  ) => {
-    handleUpdateDay(dayId, (prev) => {
-      if (athlete === 'guille') {
-        return {
-          ...prev,
-          guilleTraining: training,
-          guilleCustomActivity: customAct || prev.guilleCustomActivity,
-        };
-      }
-      return {
-        ...prev,
-        albaTraining: training,
-        albaDirectedClass: extraClass || prev.albaDirectedClass,
-        albaCustomActivity: customAct || prev.albaCustomActivity,
-      };
-    });
-  };
-
   const handleUpdateSetProgress = (
     exerciseKey: string,
     setIndex: number,
@@ -378,62 +308,113 @@ export function App() {
     });
   };
 
-  const handleExportSheetsCsv = () => {
-    const shopping = aggregateWeeklyShoppingList(days);
-    exportWeeklyMenuAndShoppingToSheetsCsv(days, shopping);
-  };
+  // First-time Minimalist Profile Gate (Guille or Alba)
+  if (!activeUser) {
+    return (
+      <div className="min-h-dvh bg-[#F2F2F7] dark:bg-black text-slate-900 dark:text-white flex items-center justify-center p-6">
+        <div className="w-full max-w-xs space-y-6 text-center">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold tracking-tight">AGfit</h1>
+            <p className="text-xs text-slate-400">
+              Selecciona tu perfil para este dispositivo
+            </p>
+          </div>
 
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => handleSelectUser('guille')}
+              className="w-full apple-card rounded-2xl p-5 text-left flex items-center justify-between hover:opacity-90 transition-opacity cursor-pointer"
+            >
+              <div>
+                <span className="text-base font-bold block">Guille</span>
+                <span className="text-xs text-slate-400">
+                  Déficit · Ciclado de hidratos
+                </span>
+              </div>
+              <span className="text-xs font-semibold text-slate-400">Entrar →</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSelectUser('alba')}
+              className="w-full apple-card rounded-2xl p-5 text-left flex items-center justify-between hover:opacity-90 transition-opacity cursor-pointer"
+            >
+              <div>
+                <span className="text-base font-bold block">Alba</span>
+                <span className="text-xs text-slate-400">
+                  Mantenimiento · Turnos HUCA
+                </span>
+              </div>
+              <span className="text-xs font-semibold text-slate-400">Entrar →</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const todayPlan = days.find((d) => d.day === todayDayId) || days[0];
   const currentSelectedDay = days.find((d) => d.day === selectedDayId) || days[0];
 
-  const TABS: Array<{ id: MainTab; label: string; icon: React.ReactNode }> = [
-    { id: 'menu', label: 'Menú', icon: <Calendar className="w-5 h-5" /> },
-    { id: 'entreno', label: 'Entreno', icon: <Dumbbell className="w-5 h-5" /> },
-    { id: 'batch', label: 'Cocina', icon: <ChefHat className="w-5 h-5" /> },
-    { id: 'compra', label: 'Compra', icon: <ShoppingCart className="w-5 h-5" /> },
+  const TABS: Array<{ id: MainTab; label: string }> = [
+    { id: 'inicio', label: 'Inicio' },
+    { id: 'menu', label: 'Menú' },
+    { id: 'entreno', label: 'Entreno' },
+    { id: 'batch', label: 'Cocina' },
+    { id: 'compra', label: 'Compra' },
   ];
 
   return (
-    <div className="min-h-dvh bg-[#F2F2F7] dark:bg-black text-slate-900 dark:text-white pb-28 transition-colors">
+    <div className="min-h-dvh bg-[#F2F2F7] dark:bg-black text-slate-900 dark:text-white pb-24 transition-colors">
       <TodayHeader
         days={days}
         selectedDayId={selectedDayId}
         todayDayId={todayDayId}
         onSelectDay={setSelectedDayId}
-        profileView={profileView}
-        onChangeProfileView={setProfileView}
+        activeUser={activeUser}
+        onSwitchUser={handleSelectUser}
         theme={theme}
         onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
         weightLogs={weightLogs}
         onAddWeightLog={(entry) =>
           setWeightLogs((prev) => [...prev, { ...entry, id: `w_${Date.now()}` }])
         }
-        onToggleSupplement={(dayId, key) =>
-          handleUpdateDay(dayId, (prev) => ({
-            ...prev,
-            supplementsCheck: {
-              ...prev.supplementsCheck,
-              [key]: !prev.supplementsCheck[key],
-            },
-          }))
-        }
-        onAutoFixLegPadelConflict={handleAutoFixLegPadelConflict}
-        onOpenGoogleModal={() => setShowGoogleModal(true)}
-        onExportSheetsCsv={handleExportSheetsCsv}
         syncActive={cloudConnected}
+        showDayStrip={activeTab === 'menu'}
       />
 
-      <main className="max-w-3xl mx-auto px-4 pt-4">
+      <main className="max-w-2xl mx-auto px-4 pt-5">
+        {activeTab === 'inicio' && (
+          <HomeTab
+            day={todayPlan}
+            activeUser={activeUser}
+            customRecipes={customRecipes}
+            onGoToMenu={() => {
+              setSelectedDayId(todayDayId);
+              setActiveTab('menu');
+            }}
+            onGoToWorkout={() => setActiveTab('entreno')}
+            onToggleSupplement={(dayId, key) =>
+              handleUpdateDay(dayId, (prev) => ({
+                ...prev,
+                supplementsCheck: {
+                  ...prev.supplementsCheck,
+                  [key]: !prev.supplementsCheck[key],
+                },
+              }))
+            }
+          />
+        )}
+
         {activeTab === 'menu' && (
           <WeeklyMenuTab
             days={days}
             selectedDayId={selectedDayId}
-            onSelectDay={setSelectedDayId}
-            profileView={profileView}
+            activeUser={activeUser}
             activeTemplateKey={activeTemplateKey}
             onApplyTemplate={handleApplyTemplate}
             onUpdateDay={handleUpdateDay}
-            onBatchUpdateShifts={handleBatchUpdateShifts}
-            onAddCustomRecipeToCatalog={(r) => setCustomRecipes((prev) => [...prev, r])}
             customRecipes={customRecipes}
           />
         )}
@@ -441,8 +422,7 @@ export function App() {
         {activeTab === 'entreno' && (
           <PersonalTrainerTab
             selectedDay={currentSelectedDay}
-            profileView={profileView}
-            onSyncTrainingToDay={handleSyncTrainingToDay}
+            activeUser={activeUser}
             setProgressMap={setProgressMap}
             onUpdateSetProgress={handleUpdateSetProgress}
             swappedExerciseMap={swappedExerciseMap}
@@ -451,25 +431,6 @@ export function App() {
                 ...prev,
                 [exId]: ((prev[exId] || 0) + 1) % (maxAlts + 1),
               }))
-            }
-            customExercisesBySession={customExercisesBySession}
-            onAddCustomExercise={(sId, ex) =>
-              setCustomExercisesBySession((prev) => ({
-                ...prev,
-                [sId]: [...(prev[sId] || []), ex],
-              }))
-            }
-            padelLogs={padelLogs}
-            onAddPadelLog={(log) =>
-              setPadelLogs((prev) => [{ ...log, id: `pad_${Date.now()}` }, ...prev])
-            }
-            runningLogs={runningLogs}
-            onAddRunningLog={(log) =>
-              setRunningLogs((prev) => [{ ...log, id: `run_${Date.now()}` }, ...prev])
-            }
-            trainingHistory={trainingHistory}
-            onAddTrainingHistory={(entry) =>
-              setTrainingHistory((prev) => [{ ...entry, id: `hist_${Date.now()}` }, ...prev])
             }
           />
         )}
@@ -517,15 +478,14 @@ export function App() {
             onDeleteCustomItem={(id) =>
               setCustomShoppingItems((prev) => prev.filter((c) => c.id !== id))
             }
-            onExportSheetsCsv={handleExportSheetsCsv}
           />
         )}
       </main>
 
-      {/* Apple-Style Floating Frosted Bottom Dock */}
+      {/* Clean Typographic Bottom Dock (Zero icons/emojis) */}
       <nav
         aria-label="Navegación principal"
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white/90 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl border border-black/10 dark:border-white/15 rounded-full px-3 py-1.5 shadow-2xl flex items-center gap-1 sm:gap-2 no-print"
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white/90 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl border border-black/10 dark:border-white/10 rounded-full p-1 shadow-xl flex items-center gap-0.5 no-print"
       >
         {TABS.map((tab) => {
           const active = activeTab === tab.id;
@@ -534,34 +494,17 @@ export function App() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-full flex items-center gap-2 text-xs font-extrabold transition-all cursor-pointer ${
+              className={`px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                 active
-                  ? 'bg-[#30D158] text-black shadow-sm'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-black shadow-sm'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              {tab.icon}
-              <span>{tab.label}</span>
+              {tab.label}
             </button>
           );
         })}
       </nav>
-
-      <GoogleEcosystemModal
-        isOpen={showGoogleModal}
-        onClose={() => setShowGoogleModal(false)}
-        config={googleConfig}
-        onUpdateConfig={setGoogleConfig}
-        days={days}
-        fullStateForSync={{
-          days,
-          pantryCheckedMap,
-          cartCheckedMap,
-          customShoppingItems,
-          weightLogs,
-          trainingHistory,
-        }}
-      />
     </div>
   );
 }

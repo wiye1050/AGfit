@@ -5,13 +5,7 @@ import {
   ShoppingAisle,
 } from '../types';
 import { aggregateWeeklyShoppingList } from '../utils/shoppingEngine';
-import {
-  Check,
-  Home,
-  Plus,
-  RotateCcw,
-  Trash2,
-} from 'lucide-react';
+import { Check, Plus, RotateCcw, Trash2 } from 'lucide-react';
 
 interface ShoppingListTabProps {
   days: DayPlan[];
@@ -25,7 +19,6 @@ interface ShoppingListTabProps {
   onToggleCustomItemPantry: (id: string) => void;
   onToggleCustomItemCart: (id: string) => void;
   onDeleteCustomItem: (id: string) => void;
-  onExportSheetsCsv: () => void;
 }
 
 const AISLE_ORDER: ShoppingAisle[] = [
@@ -38,12 +31,12 @@ const AISLE_ORDER: ShoppingAisle[] = [
 ];
 
 const AISLE_CLEAN_LABELS: Record<ShoppingAisle, string> = {
-  carniceria: '🥩 Carnicería',
-  pescaderia: '🐟 Pescadería',
-  lacteos: '🥛 Lácteos (Leche Sin Lactosa)',
-  fruteria: '🥦 Frutería y Verduras',
-  despensa: '🍚 Despensa y Café',
-  hogar: '🏠 Hogar y Extras',
+  carniceria: 'Carnicería',
+  pescaderia: 'Pescadería',
+  lacteos: 'Lácteos (Leche sin lactosa)',
+  fruteria: 'Frutería y verduras',
+  despensa: 'Despensa y café',
+  hogar: 'Hogar y extras',
 };
 
 export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
@@ -88,91 +81,79 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Top Header + Segmented View Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            Lista del Súper
-          </h2>
-          <p className="text-xs font-semibold text-slate-400">
-            Toca cualquier fila para tacharla al meterla al carro
-          </p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="apple-pill-surface p-1 rounded-full inline-flex text-xs">
+          <button
+            type="button"
+            onClick={() => setFilterMode('pendientes')}
+            className={`px-3.5 py-1.5 rounded-full font-semibold cursor-pointer ${
+              filterMode === 'pendientes'
+                ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500'
+            }`}
+          >
+            Comprar ({pendingCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterMode('despensa')}
+            className={`px-3.5 py-1.5 rounded-full font-semibold cursor-pointer ${
+              filterMode === 'despensa'
+                ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500'
+            }`}
+          >
+            En casa ({inPantryCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterMode('todos')}
+            className={`px-3.5 py-1.5 rounded-full font-semibold cursor-pointer ${
+              filterMode === 'todos'
+                ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500'
+            }`}
+          >
+            Todos
+          </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="apple-pill-surface p-1 rounded-full inline-flex text-xs">
-            <button
-              type="button"
-              onClick={() => setFilterMode('pendientes')}
-              className={`px-3.5 py-1.5 rounded-full font-extrabold cursor-pointer ${
-                filterMode === 'pendientes'
-                  ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-500'
-              }`}
-            >
-              Comprar ({pendingCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterMode('despensa')}
-              className={`px-3.5 py-1.5 rounded-full font-extrabold cursor-pointer ${
-                filterMode === 'despensa'
-                  ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-500'
-              }`}
-            >
-              En Casa ({inPantryCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterMode('todos')}
-              className={`px-3.5 py-1.5 rounded-full font-extrabold cursor-pointer ${
-                filterMode === 'todos'
-                  ? 'bg-white dark:bg-[#3A3A3C] text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-500'
-              }`}
-            >
-              Todos
-            </button>
-          </div>
-
-          {inCartCount > 0 && (
-            <button
-              type="button"
-              onClick={onResetShoppingChecks}
-              className="w-8 h-8 rounded-full apple-pill-surface flex items-center justify-center text-slate-400 hover:text-white cursor-pointer"
-              title="Reiniciar carro"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        {inCartCount > 0 && (
+          <button
+            type="button"
+            onClick={onResetShoppingChecks}
+            className="w-8 h-8 rounded-full apple-pill-surface flex items-center justify-center text-slate-400 hover:text-white cursor-pointer"
+            title="Reiniciar carro"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
-      {/* Quick Add Bar */}
+      {/* Add Item Bar */}
       <form onSubmit={handleQuickAdd} className="apple-card rounded-2xl p-2 flex items-center gap-2">
-        <div className="w-8 h-8 rounded-full bg-[#30D158]/15 text-[#30D158] flex items-center justify-center shrink-0 ml-1">
-          <Plus className="w-4 h-4" />
+        <div className="w-7 h-7 rounded-full apple-pill-surface flex items-center justify-center shrink-0 ml-1 text-slate-400">
+          <Plus className="w-3.5 h-3.5" />
         </div>
         <input
           type="text"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder="Añadir extra (ej. Papel cocina, café, jabón...)"
-          className="flex-1 bg-transparent text-sm font-semibold outline-none px-1"
+          placeholder="Añadir artículo..."
+          className="flex-1 bg-transparent text-sm font-medium outline-none px-1"
         />
         {newName.trim() && (
           <button
             type="submit"
-            className="px-4 py-1.5 rounded-full text-xs font-black bg-[#30D158] text-black cursor-pointer mr-1"
+            className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-slate-900 text-white dark:bg-white dark:text-black cursor-pointer mr-1"
           >
             Añadir
           </button>
         )}
       </form>
 
-      {/* 1-Handed Full-Row Tap Lists by Aisle */}
-      <div className="space-y-5">
+      {/* Lists by Aisle */}
+      <div className="space-y-4">
         {AISLE_ORDER.map((aisle) => {
           const aisleMenuItems = menuItems.filter((item) => {
             if (item.aisle !== aisle) return false;
@@ -195,12 +176,12 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
           }
 
           return (
-            <div key={aisle} className="space-y-2">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 px-2">
+            <div key={aisle} className="space-y-1.5">
+              <h3 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 px-2">
                 {AISLE_CLEAN_LABELS[aisle]}
               </h3>
 
-              <div className="apple-card rounded-3xl divide-y divide-black/5 dark:divide-white/5 overflow-hidden">
+              <div className="apple-card rounded-2xl divide-y divide-black/5 dark:divide-white/5 overflow-hidden">
                 {aisleMenuItems.map((item) => {
                   const inPantry = Boolean(pantryCheckedMap[item.id]);
                   const inCart = Boolean(cartCheckedMap[item.id]);
@@ -213,37 +194,32 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
                     <div
                       key={item.id}
                       onClick={() => onToggleCartItem(item.id)}
-                      className="px-4 py-3.5 flex items-center justify-between gap-3 cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:scale-[0.995] transition-all"
+                      className="px-4 py-3 flex items-center justify-between gap-3 cursor-pointer"
                     >
-                      <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all ${
+                          className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-all ${
                             inCart
-                              ? 'bg-[#30D158] text-black'
-                              : 'border-2 border-slate-300 dark:border-slate-600'
+                              ? 'bg-slate-900 text-white dark:bg-white dark:text-black'
+                              : 'border border-slate-300 dark:border-slate-600'
                           }`}
                         >
-                          {inCart && <Check className="w-4 h-4" />}
+                          {inCart && <Check className="w-3 h-3" />}
                         </div>
 
-                        <div className="min-w-0">
-                          <span
-                            className={`text-sm sm:text-base font-extrabold block truncate ${
-                              inCart || inPantry
-                                ? 'line-through text-slate-400'
-                                : 'text-slate-900 dark:text-white'
-                            }`}
-                          >
-                            {item.name}
-                          </span>
-                          <span className="text-xs font-semibold text-slate-400">
-                            Menú: {item.totalNetRaw} {item.unit}
-                          </span>
-                        </div>
+                        <span
+                          className={`text-sm font-medium truncate ${
+                            inCart || inPantry
+                              ? 'line-through text-slate-400'
+                              : 'text-slate-900 dark:text-white'
+                          }`}
+                        >
+                          {item.name}
+                        </span>
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="px-3 py-1.5 rounded-xl text-xs sm:text-sm font-black bg-[#30D158]/15 text-[#30D158]">
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                           {shortBuyText}
                         </span>
 
@@ -253,14 +229,13 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
                             e.stopPropagation();
                             onTogglePantryItem(item.id);
                           }}
-                          className={`w-9 h-9 rounded-full flex items-center justify-center text-xs transition-all cursor-pointer ${
+                          className={`px-2 py-1 rounded-md text-[11px] font-medium cursor-pointer ${
                             inPantry
-                              ? 'bg-[#FF9F0A] text-black'
-                              : 'apple-pill-surface text-slate-400 hover:text-white'
+                              ? 'bg-slate-900 text-white dark:bg-white dark:text-black'
+                              : 'apple-pill-surface text-slate-400'
                           }`}
-                          title="Marcar que ya hay en casa"
                         >
-                          <Home className="w-4 h-4" />
+                          En casa
                         </button>
                       </div>
                     </div>
@@ -271,20 +246,20 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
                   <div
                     key={c.id}
                     onClick={() => onToggleCustomItemCart(c.id)}
-                    className="px-4 py-3.5 flex items-center justify-between gap-3 cursor-pointer"
+                    className="px-4 py-3 flex items-center justify-between gap-3 cursor-pointer"
                   >
-                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div
-                        className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                        className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
                           c.inCart
-                            ? 'bg-[#30D158] text-black'
-                            : 'border-2 border-slate-300 dark:border-slate-600'
+                            ? 'bg-slate-900 text-white dark:bg-white dark:text-black'
+                            : 'border border-slate-300 dark:border-slate-600'
                         }`}
                       >
-                        {c.inCart && <Check className="w-4 h-4" />}
+                        {c.inCart && <Check className="w-3 h-3" />}
                       </div>
                       <span
-                        className={`text-sm sm:text-base font-extrabold truncate ${
+                        className={`text-sm font-medium truncate ${
                           c.inCart || c.inPantry
                             ? 'line-through text-slate-400'
                             : 'text-slate-900 dark:text-white'
@@ -294,20 +269,20 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           onToggleCustomItemPantry(c.id);
                         }}
-                        className={`w-9 h-9 rounded-full flex items-center justify-center cursor-pointer ${
+                        className={`px-2 py-1 rounded-md text-[11px] font-medium cursor-pointer ${
                           c.inPantry
-                            ? 'bg-[#FF9F0A] text-black'
+                            ? 'bg-slate-900 text-white dark:bg-white dark:text-black'
                             : 'apple-pill-surface text-slate-400'
                         }`}
                       >
-                        <Home className="w-4 h-4" />
+                        En casa
                       </button>
                       <button
                         type="button"
@@ -315,9 +290,9 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
                           e.stopPropagation();
                           onDeleteCustomItem(c.id);
                         }}
-                        className="w-9 h-9 rounded-full apple-pill-surface flex items-center justify-center text-slate-400 hover:text-[#FF2D55] cursor-pointer"
+                        className="w-7 h-7 rounded-md apple-pill-surface flex items-center justify-center text-slate-400 cursor-pointer"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
