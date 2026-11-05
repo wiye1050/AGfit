@@ -2,29 +2,11 @@
 
 :root {
   color-scheme: light dark;
-  --brand-guille-light: #059669;
-  --brand-guille-dark: #10b981;
-  --brand-alba-light: #e11d48;
-  --brand-alba-dark: #f43f5e;
-  --accent-color: var(--brand-guille-light);
-  --surface-bg-light: #f8fafc;
-  --surface-bg-dark: #070b14;
-  --surface-card-light: #ffffff;
-  --surface-card-dark: #0f172a;
-  --scrollbar-thumb: #334155;
-  --scrollbar-track: transparent;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --accent-color: var(--brand-guille-dark);
-  }
-}
-
-@supports (color: light-dark(white, black)) {
-  :root {
-    --accent-color: light-dark(var(--brand-guille-light), var(--brand-guille-dark));
-  }
+  --apple-green: #30d158;
+  --apple-pink: #ff2d55;
+  --apple-blue: #0a84ff;
+  --apple-orange: #ff9f0a;
+  --accent-color: var(--apple-green);
 }
 
 html {
@@ -32,6 +14,7 @@ html {
   accent-color: var(--accent-color);
   scrollbar-gutter: stable;
   scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html.dark {
@@ -45,27 +28,52 @@ html.light {
 body {
   min-block-size: 100dvh;
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif;
+  letter-spacing: -0.012em;
 }
 
-.scrollable-panel {
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  overscroll-behavior: contain;
+/* Apple-style surfaces */
+.apple-card {
+  background-color: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.035);
 }
 
-@supports not (scrollbar-color: auto) {
-  .scrollable-panel::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+html.dark .apple-card {
+  background-color: #1c1c1e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+
+.apple-pill-surface {
+  background-color: #e5e5ea;
+}
+
+html.dark .apple-pill-surface {
+  background-color: #2c2c2e;
+}
+
+@keyframes sheetSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.98);
   }
-  .scrollable-panel::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-    border-radius: 9999px;
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
-  .scrollable-panel::-webkit-scrollbar-track {
-    background: var(--scrollbar-track);
-  }
+}
+
+.animate-sheet {
+  animation: sheetSlideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 @media print {
