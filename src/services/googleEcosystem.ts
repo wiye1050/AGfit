@@ -98,21 +98,36 @@ export async function loginWithGoogleEcosystem(
 
 export function subscribeHouseholdRealtime(
   config: GoogleIntegrationConfig,
-  onData: (payload: Record<string, unknown>) => void
+  onSnapshotReceived: (exists: boolean, payload: Record<string, unknown> | null) => void,
+  onStatusChange?: (connected: boolean) => void
 ): Unsubscribe | null {
   const app = initFirebaseIfConfigured(config);
-  if (!app || !config.syncEnabled) return null;
+  if (!app || !config.syncEnabled) {
+    onStatusChange?.(false);
+    return null;
+  }
 
   try {
     const db = getFirestore(app);
     const docRef = doc(db, 'agfit_households', config.householdDocId || 'oviedo_guille_alba');
-    return onSnapshot(docRef, (snapshot) => {
-      if (snapshot.exists()) {
-        onData(snapshot.data() as Record<string, unknown>);
+    return onSnapshot(
+      docRef,
+      (snapshot) => {
+        onStatusChange?.(true);
+        if (snapshot.exists()) {
+          onSnapshotReceived(true, snapshot.data() as Record<string, unknown>);
+        } else {
+          onSnapshotReceived(false, null);
+        }
+      },
+      (err) => {
+        console.warn('Error en suscripción Firestore:', err);
+        onStatusChange?.(false);
       }
-    });
+    );
   } catch (err) {
     console.warn('No se pudo suscribir a Firestore:', err);
+    onStatusChange?.(false);
     return null;
   }
 }
@@ -127,10 +142,12 @@ export async function pushHouseholdRealtime(
   try {
     const db = getFirestore(app);
     const docRef = doc(db, 'agfit_households', config.householdDocId || 'oviedo_guille_alba');
+    // Clean any undefined fields recursively so Firestore setDoc never rejects
+    const cleanPayload = JSON.parse(JSON.stringify(payload));
     await setDoc(
       docRef,
       {
-        ...payload,
+        ...cleanPayload,
         updatedAt: new Date().toISOString(),
       },
       { merge: true }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlbaShift,
   CustomShoppingItem,
@@ -67,14 +67,14 @@ const INITIAL_WEIGHT_LOGS: WeightEntry[] = [
 ];
 
 const INITIAL_GOOGLE_CONFIG: GoogleIntegrationConfig = {
-  firebaseProjectId: '',
-  firebaseApiKey: '',
+  firebaseProjectId: 'agfit-oviedo-2026',
+  firebaseApiKey: 'AIzaSyBZXvIwHFDIQ4xrtMRmGq1KIzkkgPxXzCk',
   householdDocId: 'oviedo_guille_alba',
-  guilleEmail: '',
+  guilleEmail: 'guillemenendez1050@gmail.com',
   albaEmail: '',
   calendarIdGuille: 'primary',
   calendarIdAlba: 'primary',
-  syncEnabled: false,
+  syncEnabled: true,
 };
 
 export function App() {
@@ -121,7 +121,14 @@ export function App() {
 
   const [googleConfig, setGoogleConfig] = useState<GoogleIntegrationConfig>(INITIAL_GOOGLE_CONFIG);
   const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [cloudConnected, setCloudConnected] = useState(false);
 
+  // Refs to prevent initial overwrite or infinite snapshot ping-pong
+  const clientIdRef = useRef<string>(`client_${Math.random().toString(36).slice(2, 10)}`);
+  const cloudHydratedRef = useRef<boolean>(false);
+  const isApplyingRemoteRef = useRef<boolean>(false);
+
+  // 1. Load local fallback cache first
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -132,6 +139,7 @@ export function App() {
       if (parsed.customRecipes) setCustomRecipes(parsed.customRecipes);
       if (parsed.weightLogs) setWeightLogs(parsed.weightLogs);
       if (parsed.setProgressMap) setSetProgressMap(parsed.setProgressMap);
+      if (parsed.swappedExerciseMap) setSwappedExerciseMap(parsed.swappedExerciseMap);
       if (parsed.padelLogs) setPadelLogs(parsed.padelLogs);
       if (parsed.runningLogs) setRunningLogs(parsed.runningLogs);
       if (parsed.trainingHistory) setTrainingHistory(parsed.trainingHistory);
@@ -139,7 +147,11 @@ export function App() {
       if (parsed.pantryCheckedMap) setPantryCheckedMap(parsed.pantryCheckedMap);
       if (parsed.cartCheckedMap) setCartCheckedMap(parsed.cartCheckedMap);
       if (parsed.customShoppingItems) setCustomShoppingItems(parsed.customShoppingItems);
-      if (parsed.googleConfig) setGoogleConfig(parsed.googleConfig);
+      if (parsed.googleConfig && parsed.googleConfig.firebaseProjectId) {
+        setGoogleConfig(parsed.googleConfig);
+      } else {
+        setGoogleConfig(INITIAL_GOOGLE_CONFIG);
+      }
     } catch {
       // ignore
     }
@@ -156,6 +168,79 @@ export function App() {
     }
   }, [theme]);
 
+  // 2. Real-time Firestore subscription (Hydrates first before allowing writes)
+  useEffect(() => {
+    const unsub = subscribeHouseholdRealtime(
+      googleConfig,
+      (exists, remote) => {
+        if (!exists || !remote) {
+          // Document doesn't exist in Firestore yet -> seed it with our current state!
+          cloudHydratedRef.current = true;
+          pushHouseholdRealtime(googleConfig, {
+            days,
+            customRecipes,
+            weightLogs,
+            setProgressMap,
+            swappedExerciseMap,
+            padelLogs,
+            runningLogs,
+            trainingHistory,
+            completedBatchSteps,
+            pantryCheckedMap,
+            cartCheckedMap,
+            customShoppingItems,
+            lastSyncAt: clientIdRef.current,
+          });
+          return;
+        }
+
+        // Ignore our own echo snapshot
+        if (remote.lastSyncAt === clientIdRef.current && cloudHydratedRef.current) {
+          return;
+        }
+
+        isApplyingRemoteRef.current = true;
+        cloudHydratedRef.current = true;
+
+        if (Array.isArray(remote.days)) setDays(remote.days as DayPlan[]);
+        if (Array.isArray(remote.customRecipes)) setCustomRecipes(remote.customRecipes as Recipe[]);
+        if (Array.isArray(remote.weightLogs)) setWeightLogs(remote.weightLogs as WeightEntry[]);
+        if (remote.setProgressMap) {
+          setSetProgressMap(remote.setProgressMap as Record<string, SetProgress[]>);
+        }
+        if (remote.swappedExerciseMap) {
+          setSwappedExerciseMap(remote.swappedExerciseMap as Record<string, number>);
+        }
+        if (Array.isArray(remote.padelLogs)) setPadelLogs(remote.padelLogs as PadelMatchLog[]);
+        if (Array.isArray(remote.runningLogs)) setRunningLogs(remote.runningLogs as RunningLog[]);
+        if (Array.isArray(remote.trainingHistory)) {
+          setTrainingHistory(remote.trainingHistory as UserTrainingHistoryEntry[]);
+        }
+        if (remote.completedBatchSteps) {
+          setCompletedBatchSteps(remote.completedBatchSteps as Record<string, boolean>);
+        }
+        if (remote.pantryCheckedMap) {
+          setPantryCheckedMap(remote.pantryCheckedMap as Record<string, boolean>);
+        }
+        if (remote.cartCheckedMap) {
+          setCartCheckedMap(remote.cartCheckedMap as Record<string, boolean>);
+        }
+        if (Array.isArray(remote.customShoppingItems)) {
+          setCustomShoppingItems(remote.customShoppingItems as CustomShoppingItem[]);
+        }
+
+        setTimeout(() => {
+          isApplyingRemoteRef.current = false;
+        }, 60);
+      },
+      (connected) => setCloudConnected(connected)
+    );
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [googleConfig.syncEnabled, googleConfig.firebaseProjectId, googleConfig.firebaseApiKey]);
+
+  // 3. Save to localStorage + push to Cloud Firestore on user changes
   useEffect(() => {
     const payload = {
       theme,
@@ -163,6 +248,7 @@ export function App() {
       customRecipes,
       weightLogs,
       setProgressMap,
+      swappedExerciseMap,
       padelLogs,
       runningLogs,
       trainingHistory,
@@ -171,13 +257,20 @@ export function App() {
       cartCheckedMap,
       customShoppingItems,
       googleConfig,
+      lastSyncAt: clientIdRef.current,
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch {
       // ignore
     }
-    if (googleConfig.syncEnabled && googleConfig.firebaseProjectId) {
+
+    if (
+      cloudHydratedRef.current &&
+      !isApplyingRemoteRef.current &&
+      googleConfig.syncEnabled &&
+      googleConfig.firebaseProjectId
+    ) {
       pushHouseholdRealtime(googleConfig, payload);
     }
   }, [
@@ -186,6 +279,7 @@ export function App() {
     customRecipes,
     weightLogs,
     setProgressMap,
+    swappedExerciseMap,
     padelLogs,
     runningLogs,
     trainingHistory,
@@ -195,24 +289,6 @@ export function App() {
     customShoppingItems,
     googleConfig,
   ]);
-
-  useEffect(() => {
-    const unsub = subscribeHouseholdRealtime(googleConfig, (remote) => {
-      if (Array.isArray(remote.days)) setDays(remote.days as DayPlan[]);
-      if (remote.pantryCheckedMap) {
-        setPantryCheckedMap(remote.pantryCheckedMap as Record<string, boolean>);
-      }
-      if (remote.cartCheckedMap) {
-        setCartCheckedMap(remote.cartCheckedMap as Record<string, boolean>);
-      }
-      if (Array.isArray(remote.customShoppingItems)) {
-        setCustomShoppingItems(remote.customShoppingItems as CustomShoppingItem[]);
-      }
-    });
-    return () => {
-      if (unsub) unsub();
-    };
-  }, [googleConfig.syncEnabled, googleConfig.firebaseProjectId, googleConfig.firebaseApiKey]);
 
   const handleUpdateDay = (dayId: DayId, updater: (prev: DayPlan) => DayPlan) => {
     setDays((prev) => prev.map((d) => (d.day === dayId ? updater(d) : d)));
@@ -343,7 +419,7 @@ export function App() {
         onAutoFixLegPadelConflict={handleAutoFixLegPadelConflict}
         onOpenGoogleModal={() => setShowGoogleModal(true)}
         onExportSheetsCsv={handleExportSheetsCsv}
-        syncActive={googleConfig.syncEnabled}
+        syncActive={cloudConnected}
       />
 
       <main className="max-w-3xl mx-auto px-4 pt-4">

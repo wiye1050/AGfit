@@ -1,0 +1,144 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// This security rules file assumes the following data structures:
+//
+// Collection: agfit_households
+// Document ID: {householdId} (restricted to 'oviedo_guille_alba')
+// Fields:
+//   - days: list (required, 1..14 items) - Weekly meal, shift, and workout plan for Guille & Alba
+//   - updatedAt: string | timestamp (required, string 1..100 chars or timestamp) - ISO-8601 sync timestamp
+//   - theme: string (optional, 'dark' | 'light', 1..20 chars) - Active UI theme mode
+//   - customRecipes: list (optional, <= 200 items) - User-created custom recipes
+//   - weightLogs: list (optional, <= 500 items) - Weekly body weight tracking entries
+//   - setProgressMap: map (optional, <= 500 keys) - Workout set completion and weight progress
+//   - swappedExerciseMap: map (optional, <= 200 keys) - Swapped exercise alternatives state
+//   - customExercisesBySession: map (optional, <= 200 keys) - Custom exercises added per workout session
+//   - padelLogs: list (optional, <= 500 items) - Padel match logs
+//   - runningLogs: list (optional, <= 500 items) - Running session logs
+//   - trainingHistory: list (optional, <= 1000 items) - Consolidated training history entries
+//   - completedBatchSteps: map (optional, <= 200 keys) - Sunday batch cooking step completion map
+//   - pantryCheckedMap: map (optional, <= 500 keys) - Pantry stock checked state
+//   - cartCheckedMap: map (optional, <= 500 keys) - Shopping cart checked state
+//   - customShoppingItems: list (optional, <= 500 items) - Extra household shopping list items
+//   - googleConfig: map (optional, <= 20 keys) - Household sync & calendar preferences
+//   - activeTemplateKey: string (optional, 1..50 chars) - Active weekly template identifier
+//   - profileView: string (optional, 1..30 chars) - Selected household profile view
+//   - selectedDayId: string (optional, 1..30 chars) - Selected day identifier
+//   - lastSyncAt: string (optional, 1..100 chars) - Formatted last sync display time
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isTargetHousehold(householdId) {
+      return householdId == 'oviedo_guille_alba';
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+        (request.resource.data[field] is string &&
+         request.resource.data[field].size() >= minLen &&
+         request.resource.data[field].size() <= maxLen);
+    }
+
+    function isValidOptionalList(field, maxSize) {
+      return !(field in request.resource.data) ||
+        (request.resource.data[field] is list &&
+         request.resource.data[field].size() <= maxSize);
+    }
+
+    function isValidOptionalMap(field, maxKeys) {
+      return !(field in request.resource.data) ||
+        (request.resource.data[field] is map &&
+         request.resource.data[field].keys().size() <= maxKeys);
+    }
+
+    // ===============================================================
+    // Domain Validators (Applied to both create and update)
+    // ===============================================================
+
+    function isValidHouseholdPayload(data) {
+      let allowedFields = [
+        'days',
+        'updatedAt',
+        'theme',
+        'customRecipes',
+        'weightLogs',
+        'setProgressMap',
+        'swappedExerciseMap',
+        'customExercisesBySession',
+        'padelLogs',
+        'runningLogs',
+        'trainingHistory',
+        'completedBatchSteps',
+        'pantryCheckedMap',
+        'cartCheckedMap',
+        'customShoppingItems',
+        'googleConfig',
+        'activeTemplateKey',
+        'profileView',
+        'selectedDayId',
+        'lastSyncAt'
+      ];
+
+      return hasRequiredFields(['days', 'updatedAt']) &&
+        hasOnlyAllowedFields(allowedFields) &&
+        data.days is list &&
+        data.days.size() >= 1 &&
+        data.days.size() <= 14 &&
+        ((data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 100) ||
+         data.updatedAt is timestamp) &&
+        isValidOptionalString('theme', 1, 20) &&
+        isValidOptionalList('customRecipes', 200) &&
+        isValidOptionalList('weightLogs', 500) &&
+        isValidOptionalMap('setProgressMap', 500) &&
+        isValidOptionalMap('swappedExerciseMap', 200) &&
+        isValidOptionalMap('customExercisesBySession', 200) &&
+        isValidOptionalList('padelLogs', 500) &&
+        isValidOptionalList('runningLogs', 500) &&
+        isValidOptionalList('trainingHistory', 1000) &&
+        isValidOptionalMap('completedBatchSteps', 200) &&
+        isValidOptionalMap('pantryCheckedMap', 500) &&
+        isValidOptionalMap('cartCheckedMap', 500) &&
+        isValidOptionalList('customShoppingItems', 500) &&
+        isValidOptionalMap('googleConfig', 20) &&
+        isValidOptionalString('activeTemplateKey', 1, 50) &&
+        isValidOptionalString('profileView', 1, 30) &&
+        isValidOptionalString('selectedDayId', 1, 30) &&
+        isValidOptionalString('lastSyncAt', 1, 100);
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /agfit_households/{householdId} {
+      allow get, list: if isTargetHousehold(householdId);
+      allow create: if isTargetHousehold(householdId) && isValidHouseholdPayload(request.resource.data);
+      allow update: if isTargetHousehold(householdId) && isValidHouseholdPayload(request.resource.data);
+      allow delete: if false;
+    }
+
+    // Strictly deny all other paths and collections by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
