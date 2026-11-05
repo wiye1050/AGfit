@@ -120,10 +120,14 @@ export function App() {
   const cloudHydratedRef = useRef<boolean>(false);
   const isApplyingRemoteRef = useRef<boolean>(false);
 
-  const handleSelectUser = (user: 'guille' | 'alba') => {
+  const handleSelectUser = (user: 'guille' | 'alba' | null) => {
     setActiveUser(user);
     try {
-      localStorage.setItem(USER_STORAGE_KEY, user);
+      if (user) {
+        localStorage.setItem(USER_STORAGE_KEY, user);
+      } else {
+        localStorage.removeItem(USER_STORAGE_KEY);
+      }
     } catch {
       // ignore
     }
@@ -308,47 +312,92 @@ export function App() {
     });
   };
 
-  // First-time Minimalist Profile Gate (Guille or Alba)
+  // First-time Minimalist Fitness Profile Gate (Guille or Alba — Zero Subtitles)
   if (!activeUser) {
+    const todayFormatted = new Date().toLocaleDateString('es-ES', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+
     return (
-      <div className="min-h-dvh bg-[#F2F2F7] dark:bg-black text-slate-900 dark:text-white flex items-center justify-center p-6">
-        <div className="w-full max-w-xs space-y-6 text-center">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold tracking-tight">AGfit</h1>
-            <p className="text-xs text-slate-400">
-              Selecciona tu perfil para este dispositivo
+      <div className="min-h-dvh bg-[#09090B] text-white flex flex-col justify-between p-6 sm:p-10 relative overflow-hidden">
+        {/* Subtle Fitness Ambient Glow */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[480px] h-[480px] rounded-full bg-[#30D158]/10 blur-[110px]"
+        />
+
+        {/* Top Athletic Brand Mark */}
+        <div className="relative z-10 max-w-sm w-full mx-auto pt-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#30D158]" />
+            <span className="text-xs font-extrabold uppercase tracking-[0.25em] text-white/90">
+              AGFIT
+            </span>
+          </div>
+          <span className="text-xs font-medium capitalize text-zinc-500">
+            {todayFormatted}
+          </span>
+        </div>
+
+        {/* Center Hero Athlete Selector */}
+        <div className="relative z-10 max-w-sm w-full mx-auto my-auto space-y-8">
+          <div className="space-y-2">
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
+              Bienvenido
+            </h1>
+            <p className="text-sm text-zinc-400">
+              Selecciona tu perfil para entrar
             </p>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             <button
               type="button"
               onClick={() => handleSelectUser('guille')}
-              className="w-full apple-card rounded-2xl p-5 text-left flex items-center justify-between hover:opacity-90 transition-opacity cursor-pointer"
+              className="group w-full rounded-3xl bg-white/[0.04] hover:bg-white/[0.08] active:scale-[0.99] border border-white/10 hover:border-[#30D158]/50 p-6 text-left flex items-center justify-between transition-all cursor-pointer backdrop-blur-xl"
             >
-              <div>
-                <span className="text-base font-bold block">Guille</span>
-                <span className="text-xs text-slate-400">
-                  Déficit · Ciclado de hidratos
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-[#30D158]/15 border border-[#30D158]/30 flex items-center justify-center text-lg font-black text-[#30D158]">
+                  G
+                </div>
+                <span className="text-xl font-extrabold tracking-tight text-white">
+                  Guille
                 </span>
               </div>
-              <span className="text-xs font-semibold text-slate-400">Entrar →</span>
+
+              <span className="px-4 py-2 rounded-full text-xs font-bold bg-white text-black group-hover:bg-[#30D158] transition-colors">
+                Entrar →
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => handleSelectUser('alba')}
-              className="w-full apple-card rounded-2xl p-5 text-left flex items-center justify-between hover:opacity-90 transition-opacity cursor-pointer"
+              className="group w-full rounded-3xl bg-white/[0.04] hover:bg-white/[0.08] active:scale-[0.99] border border-white/10 hover:border-[#30D158]/50 p-6 text-left flex items-center justify-between transition-all cursor-pointer backdrop-blur-xl"
             >
-              <div>
-                <span className="text-base font-bold block">Alba</span>
-                <span className="text-xs text-slate-400">
-                  Mantenimiento · Turnos HUCA
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center text-lg font-black text-white">
+                  A
+                </div>
+                <span className="text-xl font-extrabold tracking-tight text-white">
+                  Alba
                 </span>
               </div>
-              <span className="text-xs font-semibold text-slate-400">Entrar →</span>
+
+              <span className="px-4 py-2 rounded-full text-xs font-bold bg-white text-black group-hover:bg-[#30D158] transition-colors">
+                Entrar →
+              </span>
             </button>
           </div>
+        </div>
+
+        {/* Minimal Footer */}
+        <div className="relative z-10 max-w-sm w-full mx-auto pb-2 text-center">
+          <span className="text-[11px] font-medium tracking-wider uppercase text-zinc-600">
+            Nutrición · Entrenamiento · Planificación
+          </span>
         </div>
       </div>
     );

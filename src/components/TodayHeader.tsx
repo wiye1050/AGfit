@@ -13,7 +13,7 @@ interface TodayHeaderProps {
   todayDayId: DayId;
   onSelectDay: (day: DayId) => void;
   activeUser: 'guille' | 'alba';
-  onSwitchUser: (user: 'guille' | 'alba') => void;
+  onSwitchUser: (user: 'guille' | 'alba' | null) => void;
   theme: ThemeMode;
   onToggleTheme: () => void;
   weightLogs: WeightEntry[];
@@ -103,7 +103,7 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
 
               <button
                 type="button"
-                onClick={() => onSwitchUser(isGuille ? 'alba' : 'guille')}
+                onClick={() => onSwitchUser(null)}
                 className="px-3 py-1 rounded-full bg-slate-900 text-white dark:bg-white dark:text-black text-xs font-semibold cursor-pointer"
                 title="Cambiar perfil"
               >
