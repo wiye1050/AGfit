@@ -13,6 +13,14 @@ export type DayId =
 export type GuilleShift = 'manana' | 'tarde' | 'manana_tarde' | 'libre';
 export type AlbaShift = 'manana' | 'tarde' | 'noche' | 'saliente' | 'libre';
 
+export interface ShiftCalendarEntry {
+  guilleShift: GuilleShift;
+  albaShift: AlbaShift;
+  note?: string;
+}
+
+export type ShiftCalendarMap = Record<string, ShiftCalendarEntry>; // key: 'YYYY-MM-DD'
+
 export type TrainingType =
   | 'empuje'
   | 'tiron'
@@ -113,6 +121,7 @@ export interface DayPlan {
     albaCreatine: boolean;
     albaWhey: boolean;
   };
+  sessionVariantId?: string;
 }
 
 export interface ExerciseAlternative {
@@ -140,6 +149,7 @@ export interface ExerciseItem {
 export interface WorkoutSessionTemplate {
   id: string;
   type: TrainingType;
+  variantLabel?: string;
   title: string;
   subtitle: string;
   durationMin: number;
@@ -235,4 +245,5 @@ export interface GoogleIntegrationConfig {
   calendarIdAlba: string;
   syncEnabled: boolean;
   lastSyncAt?: string;
+  shiftCalendar?: ShiftCalendarMap;
 }

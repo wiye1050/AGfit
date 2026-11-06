@@ -1,4 +1,4 @@
-import { DayPlan, MealSlot, ShoppingAisle } from '../types';
+import { DayPlan, MealSlot, Recipe, ShoppingAisle } from '../types';
 import { RECIPE_MAP } from '../data/recipes';
 
 export interface AggregatedShoppingItem {
@@ -111,7 +111,11 @@ function formatCommercialSuggestion(
   return `Comprar ~${Math.ceil(totalNet / 25) * 25} g`;
 }
 
-export function aggregateWeeklyShoppingList(days: DayPlan[]): AggregatedShoppingItem[] {
+export function aggregateWeeklyShoppingList(
+  days: DayPlan[],
+  customRecipes: Recipe[] = []
+): AggregatedShoppingItem[] {
+  const customMap = Object.fromEntries(customRecipes.map((r) => [r.id, r]));
   const map = new Map<string, AggregatedShoppingItem>();
 
   for (const day of days) {
@@ -125,7 +129,7 @@ export function aggregateWeeklyShoppingList(days: DayPlan[]): AggregatedShopping
       if (day.customMealOverrides[slot]) continue;
 
       const recipeId = day.meals[slot];
-      const recipe = RECIPE_MAP[recipeId];
+      const recipe = RECIPE_MAP[recipeId] || customMap[recipeId];
       if (!recipe) continue;
 
       for (const ing of recipe.ingredients) {

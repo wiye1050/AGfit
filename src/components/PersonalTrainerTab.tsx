@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import {
   DayPlan,
+  ExerciseItem,
   SetProgress,
 } from '../types';
 import { WORKOUT_SESSIONS } from '../data/workouts';
@@ -26,6 +27,8 @@ interface PersonalTrainerTabProps {
   ) => void;
   swappedExerciseMap: Record<string, number>;
   onSwapExerciseAlternative: (exerciseId: string, maxAlts: number) => void;
+  customExercisesBySession?: Record<string, ExerciseItem[]>;
+  onAddCustomExercise?: (sessionId: string, exercise: ExerciseItem) => void;
 }
 
 type GymModule = 'empuje' | 'tiron' | 'pierna' | 'movilidad';
@@ -78,11 +81,22 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
   onUpdateSetProgress,
   swappedExerciseMap,
   onSwapExerciseAlternative,
+  customExercisesBySession = {},
+  onAddCustomExercise,
 }) => {
   const isGuille = activeUser === 'guille';
   const [activeModule, setActiveModule] = useState<GymModule>('empuje');
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('ses_empuje');
   const [expandedExId, setExpandedExId] = useState<string>('emp_1');
   const [showPhysioTipId, setShowPhysioTipId] = useState<string | null>(null);
+
+  // Add custom exercise form state
+  const [showAddExerciseForm, setShowAddExerciseForm] = useState(false);
+  const [newExName, setNewExName] = useState('');
+  const [newExMuscle, setNewExMuscle] = useState('Pectoral / Espalda / Pierna');
+  const [newExSets, setNewExSets] = useState(3);
+  const [newExReps, setNewExReps] = useState('10 - 12');
+  const [newExWeight, setNewExWeight] = useState('20 kg');
 
   const [timerSeconds, setTimerSeconds] = useState<number>(90);
   const [timerRunning, setTimerRunning] = useState<boolean>(false);
@@ -96,8 +110,25 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
       scheduled === 'movilidad'
     ) {
       setActiveModule(scheduled);
+      if (selectedDay.sessionVariantId) {
+        const matchVariant = WORKOUT_SESSIONS.find(
+          (s) => s.id === selectedDay.sessionVariantId
+        );
+        if (matchVariant) {
+          setSelectedSessionId(matchVariant.id);
+          return;
+        }
+      }
+      const defaultForModule = WORKOUT_SESSIONS.find((s) => s.type === scheduled);
+      if (defaultForModule) setSelectedSessionId(defaultForModule.id);
     }
-  }, [selectedDay.day, isGuille, selectedDay.guilleTraining, selectedDay.albaTraining]);
+  }, [
+    selectedDay.day,
+    isGuille,
+    selectedDay.guilleTraining,
+    selectedDay.albaTraining,
+    selectedDay.sessionVariantId,
+  ]);
 
   useEffect(() => {
     if (!timerRunning) return;
@@ -114,14 +145,26 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
     return () => clearInterval(interval);
   }, [timerRunning]);
 
+  // All variants available for the chosen module (plus Full Body Express on strength modules)
+  const moduleVariants = WORKOUT_SESSIONS.filter(
+    (s) =>
+      s.type === activeModule ||
+      (activeModule !== 'movilidad' && s.id === 'ses_fullbody_express')
+  );
+
   const currentGymSession =
-    WORKOUT_SESSIONS.find((s) => s.type === activeModule) || WORKOUT_SESSIONS[0];
+    moduleVariants.find((s) => s.id === selectedSessionId) ||
+    moduleVariants[0] ||
+    WORKOUT_SESSIONS[0];
+
+  const customExercises = customExercisesBySession[currentGymSession.id] || [];
+  const allSessionExercises = [...currentGymSession.exercises, ...customExercises];
 
   useEffect(() => {
-    if (currentGymSession && currentGymSession.exercises[0]) {
-      setExpandedExId(currentGymSession.exercises[0].id);
+    if (allSessionExercises[0]) {
+      setExpandedExId(allSessionExercises[0].id);
     }
-  }, [activeModule, currentGymSession]);
+  }, [currentGymSession.id]);
 
   const startTimer = (sec: number) => {
     setTimerSeconds(sec);
@@ -134,12 +177,36 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
+  const handleCreateExercise = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newExName.trim() || !onAddCustomExercise) return;
+    const ex: ExerciseItem = {
+      id: `cust_ex_${Date.now()}`,
+      name: newExName.trim(),
+      muscleGroup: newExMuscle.trim() || 'General',
+      padelTransferNote: 'Ejercicio personalizado añadido a la sesión.',
+      sets: Number(newExSets) || 3,
+      reps: newExReps.trim() || '10',
+      restSeconds: 90,
+      targetRir: 'RIR 1-2',
+      guilleDefaultWeight: isGuille ? newExWeight : '25 kg',
+      albaDefaultWeight: !isGuille ? newExWeight : '10 kg',
+      guilleLastSession: 'Nuevo ejercicio',
+      albaLastSession: 'Nuevo ejercicio',
+      alternatives: [],
+    };
+    onAddCustomExercise(currentGymSession.id, ex);
+    setNewExName('');
+    setShowAddExerciseForm(false);
+    setExpandedExId(ex.id);
+  };
+
   // Compute total sets completed across the session
-  const totalSessionSets = currentGymSession.exercises.reduce(
+  const totalSessionSets = allSessionExercises.reduce(
     (acc, ex) => acc + ex.sets,
     0
   );
-  const completedSessionSets = currentGymSession.exercises.reduce((acc, ex) => {
+  const completedSessionSets = allSessionExercises.reduce((acc, ex) => {
     const list = setProgressMap[`${activeUser}_${ex.id}`] || [];
     return acc + list.filter((s) => s.completed).length;
   }, 0);
@@ -149,9 +216,9 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
   return (
     <div className="space-y-4">
       {/* ========================================================= */}
-      {/* 1. ACTIVE WORKOUT HERO CARD + PROGRESS + REST TIMER       */}
+      {/* 1. ACTIVE WORKOUT HERO CARD + VARIANTS + REST TIMER       */}
       {/* ========================================================= */}
-      <div className="apple-card rounded-3xl p-5 sm:p-6 space-y-5">
+      <div className="apple-card rounded-3xl p-5 sm:p-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           {/* Segmented Session Selector */}
           <div className="apple-pill-surface p-1 rounded-full inline-flex text-xs">
@@ -168,7 +235,11 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setActiveModule(tab.id)}
+                  onClick={() => {
+                    setActiveModule(tab.id);
+                    const first = WORKOUT_SESSIONS.find((s) => s.type === tab.id);
+                    if (first) setSelectedSessionId(first.id);
+                  }}
                   className={`px-3.5 py-1.5 rounded-full font-bold transition-all cursor-pointer ${
                     active
                       ? 'bg-white dark:bg-white text-slate-900 dark:text-black shadow-sm'
@@ -220,12 +291,37 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
           </div>
         </div>
 
+        {/* Variant Switcher (Variante A / Variante B / Express 35m) */}
+        {moduleVariants.length > 1 && (
+          <div className="flex flex-wrap gap-1.5 pt-0.5">
+            {moduleVariants.map((variant, vIdx) => {
+              const isSelected = currentGymSession.id === variant.id;
+              const label =
+                variant.variantLabel || `Variante ${vIdx === 0 ? 'A · Base' : 'B'}`;
+              return (
+                <button
+                  key={variant.id}
+                  type="button"
+                  onClick={() => setSelectedSessionId(variant.id)}
+                  className={`px-3 py-1 rounded-full text-[11px] font-extrabold cursor-pointer transition-colors ${
+                    isSelected
+                      ? 'bg-[#30D158] text-black'
+                      : 'apple-pill-surface text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Session Title & Set Progress Bar */}
         <div className="space-y-2.5">
           <div className="flex items-baseline justify-between gap-2">
             <div>
               <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#30D158] block">
-                Enjoy Oviedo · {currentGymSession.durationMin} min
+                Enjoy Oviedo · {currentGymSession.durationMin} min · {allSessionExercises.length} ejercicios
               </span>
               <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white mt-0.5">
                 {currentGymSession.title}
@@ -249,7 +345,7 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
       {/* 2. ACCORDION EXERCISES WITH PERFORMANCE STEPPERS          */}
       {/* ========================================================= */}
       <div className="space-y-2.5">
-        {currentGymSession.exercises.map((exercise, idx) => {
+        {allSessionExercises.map((exercise, idx) => {
           const isExpanded = expandedExId === exercise.id;
           const altIdx = swappedExerciseMap[exercise.id] || 0;
           const activeAlt =
@@ -262,6 +358,9 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
           const defaultWeight = isGuille
             ? exercise.guilleDefaultWeight
             : exercise.albaDefaultWeight;
+          const lastRef = isGuille
+            ? exercise.guilleLastSession
+            : exercise.albaLastSession;
 
           const setsList: SetProgress[] =
             setProgressMap[progressKey] ||
@@ -269,7 +368,7 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
               completed: false,
               weight: defaultWeight,
               reps: exercise.reps.includes('-')
-                ? exercise.reps.split('-')[1]
+                ? exercise.reps.split('-')[1].trim()
                 : exercise.reps,
               rir: exercise.targetRir,
             }));
@@ -310,7 +409,7 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
                       {displayName}
                     </h3>
                     <p className="text-xs font-medium text-slate-400">
-                      {exercise.sets} series × {exercise.reps}
+                      {exercise.sets} series × {exercise.reps} · Ant: {lastRef}
                     </p>
                   </div>
                 </div>
@@ -346,7 +445,7 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
                       className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
                     >
                       <Info className="w-3.5 h-3.5 text-[#30D158]" />
-                      <span>Nota técnica</span>
+                      <span>Nota biomecánica</span>
                     </button>
 
                     {exercise.alternatives.length > 0 && (
@@ -485,9 +584,9 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
                               ).length;
                               if (
                                 nextCompletedCount === setsList.length &&
-                                currentGymSession.exercises[idx + 1]
+                                allSessionExercises[idx + 1]
                               ) {
-                                setExpandedExId(currentGymSession.exercises[idx + 1].id);
+                                setExpandedExId(allSessionExercises[idx + 1].id);
                               }
                             }
                           }}
@@ -509,6 +608,83 @@ export const PersonalTrainerTab: React.FC<PersonalTrainerTabProps> = ({
           );
         })}
       </div>
+
+      {/* ========================================================= */}
+      {/* 3. ADD CUSTOM EXERCISE TO SESSION (CLOUD SYNCED)          */}
+      {/* ========================================================= */}
+      {onAddCustomExercise && (
+        <div className="apple-card rounded-3xl p-4">
+          {!showAddExerciseForm ? (
+            <button
+              type="button"
+              onClick={() => setShowAddExerciseForm(true)}
+              className="w-full py-2 text-xs font-extrabold text-[#30D158] flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Añadir ejercicio a esta sesión</span>
+            </button>
+          ) : (
+            <form onSubmit={handleCreateExercise} className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                  Nuevo ejercicio para {currentGymSession.title}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAddExerciseForm(false)}
+                  className="text-xs text-slate-400 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              </div>
+              <input
+                type="text"
+                required
+                value={newExName}
+                onChange={(e) => setNewExName(e.target.value)}
+                placeholder="Nombre del ejercicio (ej. Remo Gironda, Press militar...)"
+                className="w-full px-3.5 py-2.5 rounded-2xl text-xs font-bold apple-pill-surface outline-none"
+              />
+              <div className="grid grid-cols-3 gap-2">
+                <input
+                  type="number"
+                  value={newExSets}
+                  onChange={(e) => setNewExSets(Number(e.target.value))}
+                  placeholder="Series"
+                  className="px-3 py-2 rounded-xl text-xs font-bold apple-pill-surface outline-none"
+                />
+                <input
+                  type="text"
+                  value={newExReps}
+                  onChange={(e) => setNewExReps(e.target.value)}
+                  placeholder="Reps (ej. 10-12)"
+                  className="px-3 py-2 rounded-xl text-xs font-bold apple-pill-surface outline-none"
+                />
+                <input
+                  type="text"
+                  value={newExWeight}
+                  onChange={(e) => setNewExWeight(e.target.value)}
+                  placeholder="Peso (ej. 20 kg)"
+                  className="px-3 py-2 rounded-xl text-xs font-bold apple-pill-surface outline-none"
+                />
+              </div>
+              <input
+                type="text"
+                value={newExMuscle}
+                onChange={(e) => setNewExMuscle(e.target.value)}
+                placeholder="Grupo muscular"
+                className="w-full px-3 py-2 rounded-xl text-xs font-medium apple-pill-surface outline-none"
+              />
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-2xl text-xs font-extrabold bg-[#30D158] text-black cursor-pointer"
+              >
+                Guardar ejercicio en la nube
+              </button>
+            </form>
+          )}
+        </div>
+      )}
     </div>
   );
 };

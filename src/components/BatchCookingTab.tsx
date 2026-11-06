@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   BatchTrack,
   DayPlan,
+  Recipe,
 } from '../types';
 import {
   BATCH_COOKING_STEPS,
@@ -14,6 +15,7 @@ interface BatchCookingTabProps {
   completedStepIds: Record<string, boolean>;
   onToggleStepCompleted: (stepId: string) => void;
   onResetBatchSteps: () => void;
+  customRecipes?: Recipe[];
 }
 
 const TRACK_LABELS: Record<BatchTrack, string> = {
@@ -28,6 +30,7 @@ export const BatchCookingTab: React.FC<BatchCookingTabProps> = ({
   completedStepIds,
   onToggleStepCompleted,
   onResetBatchSteps,
+  customRecipes = [],
 }) => {
   const [subTab, setSubTab] = useState<'pasos' | 'tuppers'>('pasos');
   const [stepTimers, setStepTimers] = useState<
@@ -67,7 +70,7 @@ export const BatchCookingTab: React.FC<BatchCookingTabProps> = ({
     return `${m}:${String(s).padStart(2, '0')}`;
   };
 
-  const batchSummary = calculateWeeklyBatchSummary(days);
+  const batchSummary = calculateWeeklyBatchSummary(days, customRecipes);
   const completedCount = BATCH_COOKING_STEPS.filter((s) => completedStepIds[s.id]).length;
   const totalSteps = BATCH_COOKING_STEPS.length;
   const progressPct = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0;

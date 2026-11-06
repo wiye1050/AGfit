@@ -11,8 +11,9 @@ import {
 } from '../types';
 import { RECIPES, RECIPE_MAP } from '../data/recipes';
 import { computeDayNutrition } from '../utils/nutritionEngine';
+import { getScaledIngredientAmount } from '../utils/shiftScheduler';
 import { DIRECTED_CLASSES_CATALOG, WORKOUT_SESSIONS } from '../data/workouts';
-import { Check, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Plus, RefreshCw, X } from 'lucide-react';
 
 interface WeeklyMenuTabProps {
   days: DayPlan[];
@@ -23,11 +24,13 @@ interface WeeklyMenuTabProps {
   onApplyTemplate: (key: 'semana_a' | 'semana_b' | 'semana_c') => void;
   onUpdateDay: (dayId: DayId, updater: (prev: DayPlan) => DayPlan) => void;
   onGoToWorkout: () => void;
+  onGoToShifts?: () => void;
   onToggleSupplement: (
     day: DayId,
     key: 'guilleCreatine' | 'guilleWhey' | 'albaCreatine' | 'albaWhey'
   ) => void;
   customRecipes: Recipe[];
+  onAddCustomRecipe?: (recipe: Recipe) => void;
 }
 
 const MEAL_LABELS: Record<MealSlot, { title: string; time: string }> = {
@@ -82,7 +85,7 @@ const TRAINING_INFO: Record<TrainingType, { label: string; full: string; meta: s
   movilidad: {
     label: 'Movilidad',
     full: 'Movilidad y prevención',
-    meta: '25 min · 4 ejercicios',
+    meta: '25 min · 5 ejercicios',
   },
   clase_dirigida: {
     label: 'Clase Enjoy',
@@ -178,20 +181,37 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
   onApplyTemplate,
   onUpdateDay,
   onGoToWorkout,
+  onGoToShifts,
   onToggleSupplement,
   customRecipes,
+  onAddCustomRecipe,
 }) => {
   const isGuille = activeUser === 'guille';
   const [weightMode, setWeightMode] = useState<'crudo' | 'cocinado'>('crudo');
   const [showDayConfig, setShowDayConfig] = useState(false);
 
   const [activeSheetSlot, setActiveSheetSlot] = useState<MealSlot | null>(null);
-  const [sheetTab, setSheetTab] = useState<'cambiar' | 'receta' | 'libre'>('cambiar');
+  const [sheetTab, setSheetTab] = useState<'cambiar' | 'crear' | 'receta' | 'libre'>('cambiar');
+  const [catalogFilter, setCatalogFilter] = useState<'todos' | 'batch' | 'airfryer' | 'tupper'>('todos');
+  const [searchQuery, setSearchQuery] = useState('');
 
+  // Manual override state
   const [editTitle, setEditTitle] = useState('');
   const [editKcal, setEditKcal] = useState(550);
   const [editProt, setEditProt] = useState(45);
   const [editCarbs, setEditCarbs] = useState(60);
+
+  // New recipe creator state (persisted to Firestore customRecipes)
+  const [newRecipeTitle, setNewRecipeTitle] = useState('');
+  const [newRecipePrep, setNewRecipePrep] = useState<'batch_domingo' | 'airfryer_express' | 'montaje_rapido'>('airfryer_express');
+  const [newRecipeKcal, setNewRecipeKcal] = useState(560);
+  const [newRecipeProt, setNewRecipeProt] = useState(48);
+  const [newRecipeCarbs, setNewRecipeCarbs] = useState(55);
+  const [newRecipeIng1Name, setNewRecipeIng1Name] = useState('');
+  const [newRecipeIng1G, setNewRecipeIng1G] = useState(200);
+  const [newRecipeIng2Name, setNewRecipeIng2Name] = useState('');
+  const [newRecipeIng2G, setNewRecipeIng2G] = useState(80);
+  const [newRecipeNotes, setNewRecipeNotes] = useState('');
 
   const allRecipes = [...RECIPES, ...customRecipes];
   const recipeLookup: Record<string, Recipe> = {
@@ -201,10 +221,11 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
 
   const currentDay = days.find((d) => d.day === selectedDayId) || days[0];
   const isViewingToday = currentDay.day === todayDayId;
-  const nutrition = computeDayNutrition(currentDay);
+  const nutrition = computeDayNutrition(currentDay, customRecipes);
 
   const planned = isGuille ? nutrition.guillePlanned : nutrition.albaPlanned;
   const target = isGuille ? nutrition.guilleTarget : nutrition.albaTarget;
+  const userCarbLevel = isGuille ? nutrition.guilleLevel : nutrition.albaLevel;
   const currentShiftLabel = isGuille
     ? GUILLE_SHIFT_LABELS[currentDay.guilleShift]
     : ALBA_SHIFT_LABELS[currentDay.albaShift];
@@ -229,11 +250,45 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
   const creatineKey = isGuille ? 'guilleCreatine' : 'albaCreatine';
   const wheyKey = isGuille ? 'guilleWhey' : 'albaWhey';
 
+  const getSlotCompatibleRecipes = (slot: MealSlot) =>
+    allRecipes.filter((r) => {
+      if (slot === 'desayuno' || slot === 'merienda') {
+        return r.slot === 'desayuno_merienda';
+      }
+      if (slot === 'snack_nocturno') {
+        return r.slot === 'snack_noche' || r.slot === 'desayuno_merienda';
+      }
+      return r.slot === 'principal';
+    });
+
+  // 1-Tap Quick Rotate on any Meal Card
+  const handleQuickRotateSlot = (slot: MealSlot, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const compatible = getSlotCompatibleRecipes(slot);
+    if (compatible.length === 0) return;
+    const currId = currentDay.meals[slot];
+    const currIdx = compatible.findIndex((r) => r.id === currId);
+    const nextRecipe = compatible[(currIdx + 1) % compatible.length];
+
+    onUpdateDay(currentDay.day, (prev) => {
+      const nextOverrides = { ...prev.customMealOverrides };
+      delete nextOverrides[slot];
+      return {
+        ...prev,
+        meals: { ...prev.meals, [slot]: nextRecipe.id },
+        freeMeals: { ...prev.freeMeals, [slot]: false },
+        customMealOverrides: nextOverrides,
+      };
+    });
+  };
+
   const openMealSheet = (slot: MealSlot) => {
     const custom = currentDay.customMealOverrides[slot];
     const r = recipeLookup[currentDay.meals[slot]];
     setActiveSheetSlot(slot);
     setSheetTab('cambiar');
+    setCatalogFilter('todos');
+    setSearchQuery('');
     if (custom) {
       const m = isGuille ? custom.guilleMacros : custom.albaMacros;
       setEditTitle(custom.title);
@@ -247,29 +302,6 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
       setEditProt(m.protein);
       setEditCarbs(m.carbs);
     }
-  };
-
-  const toggleSaladoDulce = (slot: 'desayuno' | 'merienda', e: React.MouseEvent) => {
-    e.stopPropagation();
-    const curr = recipeLookup[currentDay.meals[slot]];
-    const nextId =
-      slot === 'desayuno'
-        ? curr?.style === 'salado'
-          ? 'des_dulce_yogur_avena'
-          : 'des_salado_jamon_huevo'
-        : curr?.style === 'salado'
-        ? 'mer_dulce_whey_yogur'
-        : 'mer_salado_pavo_queso';
-
-    onUpdateDay(currentDay.day, (prev) => {
-      const nextOverrides = { ...prev.customMealOverrides };
-      delete nextOverrides[slot];
-      return {
-        ...prev,
-        meals: { ...prev.meals, [slot]: nextId },
-        customMealOverrides: nextOverrides,
-      };
-    });
   };
 
   const handleSaveManualEdit = (e: React.FormEvent) => {
@@ -307,6 +339,90 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
     setActiveSheetSlot(null);
   };
 
+  const handleCreatePermanentRecipe = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeSheetSlot || !newRecipeTitle.trim() || !onAddCustomRecipe) return;
+
+    const slotType: Recipe['slot'] =
+      activeSheetSlot === 'desayuno' || activeSheetSlot === 'merienda'
+        ? 'desayuno_merienda'
+        : activeSheetSlot === 'snack_nocturno'
+        ? 'snack_noche'
+        : 'principal';
+
+    const newId = `cust_rec_${Date.now()}`;
+    const gMacros = {
+      kcal: isGuille ? Number(newRecipeKcal) : Math.round(Number(newRecipeKcal) * 1.3),
+      protein: isGuille ? Number(newRecipeProt) : Math.round(Number(newRecipeProt) * 1.4),
+      carbs: isGuille ? Number(newRecipeCarbs) : Math.round(Number(newRecipeCarbs) * 1.3),
+      fat: 14,
+    };
+    const aMacros = {
+      kcal: !isGuille ? Number(newRecipeKcal) : Math.round(Number(newRecipeKcal) * 0.76),
+      protein: !isGuille ? Number(newRecipeProt) : Math.round(Number(newRecipeProt) * 0.7),
+      carbs: !isGuille ? Number(newRecipeCarbs) : Math.round(Number(newRecipeCarbs) * 0.76),
+      fat: 11,
+    };
+
+    const ingredients = [];
+    if (newRecipeIng1Name.trim()) {
+      const gAmt = isGuille ? Number(newRecipeIng1G) : Math.round(Number(newRecipeIng1G) * 1.35);
+      const aAmt = !isGuille ? Number(newRecipeIng1G) : Math.round(Number(newRecipeIng1G) * 0.72);
+      ingredients.push({
+        id: `ing_cust_${Date.now()}_1`,
+        name: newRecipeIng1Name.trim(),
+        aisle: 'carniceria' as const,
+        unit: 'g' as const,
+        guilleAmountRaw: gAmt,
+        albaAmountRaw: aAmt,
+        cookedRatio: 0.85,
+      });
+    }
+    if (newRecipeIng2Name.trim()) {
+      const gAmt = isGuille ? Number(newRecipeIng2G) : Math.round(Number(newRecipeIng2G) * 1.35);
+      const aAmt = !isGuille ? Number(newRecipeIng2G) : Math.round(Number(newRecipeIng2G) * 0.72);
+      ingredients.push({
+        id: `ing_cust_${Date.now()}_2`,
+        name: newRecipeIng2Name.trim(),
+        aisle: 'despensa' as const,
+        unit: 'g' as const,
+        guilleAmountRaw: gAmt,
+        albaAmountRaw: aAmt,
+        cookedRatio: 2.0,
+      });
+    }
+
+    const createdRecipe: Recipe = {
+      id: newId,
+      title: newRecipeTitle.trim(),
+      subtitle: 'Receta personalizada guardada en la nube',
+      slot: slotType,
+      style: newRecipePrep === 'batch_domingo' ? 'batch_tradicional' : 'airfryer_fresco',
+      prepType: newRecipePrep,
+      tupperFriendly: true,
+      appliance: newRecipePrep === 'airfryer_express' ? 'airfryer' : 'vitro',
+      guilleBaseMacros: gMacros,
+      albaBaseMacros: aMacros,
+      ingredients,
+      portionNoteGuille: `${gMacros.kcal} kcal · ${gMacros.protein}g P`,
+      portionNoteAlba: `${aMacros.kcal} kcal · ${aMacros.protein}g P`,
+      cookingNotes: newRecipeNotes.trim() || 'Receta personalizada de casa.',
+      tags: ['Personalizada'],
+    };
+
+    onAddCustomRecipe(createdRecipe);
+    onUpdateDay(currentDay.day, (prev) => ({
+      ...prev,
+      meals: { ...prev.meals, [activeSheetSlot]: newId },
+      freeMeals: { ...prev.freeMeals, [activeSheetSlot]: false },
+    }));
+    setNewRecipeTitle('');
+    setNewRecipeIng1Name('');
+    setNewRecipeIng2Name('');
+    setNewRecipeNotes('');
+    setActiveSheetSlot(null);
+  };
+
   return (
     <div className="space-y-4">
       {/* ========================================================= */}
@@ -315,30 +431,46 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
       <div className="apple-card rounded-3xl p-5 sm:p-6 space-y-5">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#30D158] block">
-              {isViewingToday ? 'Hoy' : 'Plan diario'} · {currentShiftLabel}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#30D158]">
+                {isViewingToday ? 'Hoy' : 'Plan diario'} · {currentShiftLabel}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-white/10 text-slate-600 dark:text-zinc-300">
+                HC {userCarbLevel}
+              </span>
+            </div>
             <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white mt-0.5">
               {currentDay.label}
             </h1>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowDayConfig((v) => !v)}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
-              showDayConfig
-                ? 'bg-[#30D158] text-black'
-                : 'apple-pill-surface text-slate-700 dark:text-zinc-200'
-            }`}
-          >
-            <span>Ajustar día</span>
-            <ChevronDown
-              className={`w-3.5 h-3.5 transition-transform ${
-                showDayConfig ? 'rotate-180' : ''
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onGoToShifts && (
+              <button
+                type="button"
+                onClick={onGoToShifts}
+                className="px-3 py-1.5 rounded-full text-xs font-bold apple-pill-surface text-[#30D158] cursor-pointer"
+              >
+                Turnos
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowDayConfig((v) => !v)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                showDayConfig
+                  ? 'bg-[#30D158] text-black'
+                  : 'apple-pill-surface text-slate-700 dark:text-zinc-200'
               }`}
-            />
-          </button>
+            >
+              <span>Ajustar</span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform ${
+                  showDayConfig ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         {/* Calorie Ring + 3 Clean Horizontal Macro Progress Bars */}
@@ -534,7 +666,7 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
             {/* Week Template Selector */}
             <div className="flex items-center justify-between pt-2 border-t border-black/5 dark:border-white/[0.07]">
               <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                Rotación de menú
+                Plantillas base
               </span>
               <div className="flex gap-1">
                 {(['semana_a', 'semana_b', 'semana_c'] as const).map((key, idx) => (
@@ -589,7 +721,7 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
       {/* ========================================================= */}
       <div className="flex items-center justify-between px-1 pt-1">
         <span className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-400">
-          Comidas del día
+          Comidas del día ({allRecipes.length} en catálogo)
         </span>
         <div className="apple-pill-surface p-0.5 rounded-full inline-flex text-xs">
           <button
@@ -618,7 +750,7 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
       </div>
 
       {/* ========================================================= */}
-      {/* 4. MEAL CARDS WITH TYPOGRAPHIC INGREDIENT PILLS           */}
+      {/* 4. MEAL CARDS WITH DYNAMIC SHIFT GRAMS & 1-TAP ROTATION   */}
       {/* ========================================================= */}
       <div className="space-y-3">
         {slots.map((slot) => {
@@ -627,15 +759,11 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
           const isFree = Boolean(currentDay.freeMeals[slot]);
           const custom = currentDay.customMealOverrides[slot];
           const recipe = recipeLookup[currentDay.meals[slot]];
-
-          const carbMult =
-            isGuille && (slot === 'comida' || slot === 'cena')
-              ? nutrition.guilleLevel === 'alto'
-                ? 1.15
-                : nutrition.guilleLevel === 'bajo'
-                ? 0.8
-                : 1
-              : 1;
+          const logistics = nutrition.mealLogistics[slot];
+          const isTupperHuca =
+            !isGuille &&
+            ((slot === 'merienda' && currentDay.albaShift === 'tarde') ||
+              (slot === 'snack_nocturno' && currentDay.albaShift === 'noche'));
 
           return (
             <div
@@ -647,7 +775,7 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {isNow && (
                       <span className="w-1.5 h-1.5 rounded-full bg-[#30D158]" />
                     )}
@@ -659,6 +787,11 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
                       {meta.title} · {meta.time}
                       {isNow ? ' · Ahora' : ''}
                     </span>
+                    {isTupperHuca && (
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-[#30D158]/15 text-[#30D158]">
+                        Tupper HUCA
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white leading-snug">
@@ -668,39 +801,45 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
                       ? custom.title
                       : recipe?.title}
                   </h3>
+
+                  {logistics?.scheduleHint && (
+                    <p className="text-[11px] text-slate-400 dark:text-zinc-500">
+                      {logistics.scheduleHint}
+                    </p>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  {(slot === 'desayuno' || slot === 'merienda') && !isFree && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {!isFree && (
                     <button
                       type="button"
-                      onClick={(e) => toggleSaladoDulce(slot, e)}
-                      className="px-3 py-1 rounded-full text-xs font-bold apple-pill-surface text-slate-700 dark:text-zinc-300 hover:opacity-80 cursor-pointer"
+                      onClick={(e) => handleQuickRotateSlot(slot, e)}
+                      title="Rotar por otro plato equivalente del catálogo"
+                      className="px-2.5 py-1.5 rounded-full text-xs font-bold apple-pill-surface text-slate-600 dark:text-zinc-300 hover:text-[#30D158] flex items-center gap-1 cursor-pointer"
                     >
-                      {recipe?.style === 'salado' ? 'Salado' : 'Dulce'}
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Rotar</span>
                     </button>
                   )}
                   <ChevronRight className="w-4 h-4 text-slate-400" />
                 </div>
               </div>
 
-              {/* Clean Typographic Ingredient Pills (Zero Emojis) */}
+              {/* Clean Typographic Ingredient Pills (Zero Emojis, Dynamic Carb Scaling) */}
               {!isFree && recipe && !custom && (
                 <div className="flex flex-wrap gap-1.5 pt-0.5">
                   {recipe.ingredients.map((ing) => {
                     const baseRaw = isGuille
                       ? ing.guilleAmountRaw
                       : ing.albaAmountRaw;
-                    const isCarb =
-                      isGuille &&
-                      ing.aisle === 'despensa' &&
-                      (ing.name.toLowerCase().includes('arroz') ||
-                        ing.name.toLowerCase().includes('pasta') ||
-                        ing.name.toLowerCase().includes('cuscús') ||
-                        ing.name.toLowerCase().includes('patata'));
-                    const adjustedRaw = isCarb
-                      ? Math.round(baseRaw * carbMult)
-                      : baseRaw;
+                    if (baseRaw <= 0) return null;
+
+                    const scaledInfo = getScaledIngredientAmount(
+                      ing.id,
+                      baseRaw,
+                      userCarbLevel
+                    );
+                    const adjustedRaw = scaledInfo.amount;
                     const val =
                       weightMode === 'crudo'
                         ? adjustedRaw
@@ -714,7 +853,11 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
                     return (
                       <div
                         key={ing.id}
-                        className="px-3 py-1.5 rounded-xl apple-pill-surface inline-flex items-baseline gap-1.5"
+                        className={`px-3 py-1.5 rounded-xl inline-flex items-baseline gap-1.5 ${
+                          scaledInfo.scaled
+                            ? 'bg-[#30D158]/10 border border-[#30D158]/25'
+                            : 'apple-pill-surface'
+                        }`}
                       >
                         <span className="text-xs font-extrabold text-slate-900 dark:text-white">
                           {val}
@@ -795,7 +938,7 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
       </div>
 
       {/* ========================================================= */}
-      {/* BOTTOM SHEET: SWAP DISH / PREPARATION / MANUAL            */}
+      {/* BOTTOM SHEET: CATALOG / CREATE RECIPE / PREP / MANUAL     */}
       {/* ========================================================= */}
       {activeSheetSlot && (
         <div
@@ -803,7 +946,7 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
           onClick={() => setActiveSheetSlot(null)}
         >
           <div
-            className="w-full max-w-md bg-white dark:bg-[#141416] rounded-t-3xl sm:rounded-3xl p-6 space-y-4 animate-sheet max-h-[85dvh] overflow-y-auto border-t sm:border border-white/10"
+            className="w-full max-w-md bg-white dark:bg-[#141416] rounded-t-3xl sm:rounded-3xl p-6 space-y-4 animate-sheet max-h-[88dvh] overflow-y-auto border-t sm:border border-white/10"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -825,7 +968,7 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
               </button>
             </div>
 
-            <div className="apple-pill-surface p-1 rounded-full grid grid-cols-3 text-xs">
+            <div className="apple-pill-surface p-1 rounded-full grid grid-cols-4 text-[11px]">
               <button
                 type="button"
                 onClick={() => setSheetTab('cambiar')}
@@ -835,7 +978,18 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
                     : 'text-slate-400'
                 }`}
               >
-                Cambiar plato
+                Catálogo
+              </button>
+              <button
+                type="button"
+                onClick={() => setSheetTab('crear')}
+                className={`py-1.5 rounded-full font-bold cursor-pointer ${
+                  sheetTab === 'crear'
+                    ? 'bg-[#30D158] text-black shadow-sm'
+                    : 'text-slate-400'
+                }`}
+              >
+                + Crear
               </button>
               <button
                 type="button"
@@ -846,7 +1000,7 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
                     : 'text-slate-400'
                 }`}
               >
-                Preparación
+                Receta
               </button>
               <button
                 type="button"
@@ -857,69 +1011,250 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
                     : 'text-slate-400'
                 }`}
               >
-                Manual / Libre
+                Libre
               </button>
             </div>
 
             {sheetTab === 'cambiar' && (
-              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                {allRecipes
-                  .filter((r) => {
-                    if (activeSheetSlot === 'desayuno' || activeSheetSlot === 'merienda') {
-                      return r.slot === 'desayuno_merienda';
-                    }
-                    if (activeSheetSlot === 'snack_nocturno') {
-                      return r.slot === 'snack_noche' || r.slot === 'desayuno_merienda';
-                    }
-                    return r.slot === 'principal';
-                  })
-                  .map((r) => {
-                    const isSelected = currentDay.meals[activeSheetSlot] === r.id;
-                    return (
+              <div className="space-y-3">
+                {/* Search + Filter */}
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar por plato o ingrediente (pollo, arroz, salmón...)"
+                  className="w-full px-3.5 py-2 rounded-2xl text-xs font-medium apple-pill-surface outline-none"
+                />
+
+                {(activeSheetSlot === 'comida' || activeSheetSlot === 'cena') && (
+                  <div className="flex flex-wrap gap-1.5 text-[11px]">
+                    {(
+                      [
+                        { id: 'todos', label: 'Todos' },
+                        { id: 'batch', label: 'Batch Domingo' },
+                        { id: 'airfryer', label: 'Airfryer / Rápido' },
+                        { id: 'tupper', label: 'Tupper Trabajo/HUCA' },
+                      ] as const
+                    ).map((f) => (
                       <button
-                        key={r.id}
+                        key={f.id}
                         type="button"
-                        onClick={() => {
-                          onUpdateDay(currentDay.day, (prev) => {
-                            const nextOverrides = { ...prev.customMealOverrides };
-                            delete nextOverrides[activeSheetSlot];
-                            return {
-                              ...prev,
-                              meals: { ...prev.meals, [activeSheetSlot]: r.id },
-                              freeMeals: { ...prev.freeMeals, [activeSheetSlot]: false },
-                              customMealOverrides: nextOverrides,
-                            };
-                          });
-                          setActiveSheetSlot(null);
-                        }}
-                        className={`w-full p-4 rounded-2xl text-left flex items-center justify-between gap-3 cursor-pointer transition-all ${
-                          isSelected
-                            ? 'bg-[#30D158]/15 border border-[#30D158]/40'
-                            : 'apple-pill-surface hover:opacity-90'
+                        onClick={() => setCatalogFilter(f.id)}
+                        className={`px-2.5 py-1 rounded-full font-bold cursor-pointer ${
+                          catalogFilter === f.id
+                            ? 'bg-[#30D158] text-black'
+                            : 'apple-pill-surface text-slate-400'
                         }`}
                       >
-                        <div>
-                          <div className="text-sm font-extrabold text-slate-900 dark:text-white">
-                            {r.title}
-                          </div>
-                          <div className="text-xs text-slate-400 mt-0.5">
-                            {isGuille ? r.portionNoteGuille : r.portionNoteAlba}
-                          </div>
-                        </div>
-                        {isSelected && (
-                          <span className="text-xs font-extrabold text-[#30D158] shrink-0">
-                            Activo
-                          </span>
-                        )}
+                        {f.label}
                       </button>
-                    );
-                  })}
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {getSlotCompatibleRecipes(activeSheetSlot)
+                    .filter((r) => {
+                      if (catalogFilter === 'batch' && r.prepType !== 'batch_domingo') return false;
+                      if (
+                        catalogFilter === 'airfryer' &&
+                        r.prepType !== 'airfryer_express' &&
+                        r.prepType !== 'montaje_rapido'
+                      )
+                        return false;
+                      if (catalogFilter === 'tupper' && !r.tupperFriendly) return false;
+                      if (searchQuery.trim()) {
+                        const q = searchQuery.toLowerCase();
+                        const matchTitle = r.title.toLowerCase().includes(q);
+                        const matchIng = r.ingredients.some((i) =>
+                          i.name.toLowerCase().includes(q)
+                        );
+                        return matchTitle || matchIng;
+                      }
+                      return true;
+                    })
+                    .map((r) => {
+                      const isSelected = currentDay.meals[activeSheetSlot] === r.id;
+                      const m = isGuille ? r.guilleBaseMacros : r.albaBaseMacros;
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => {
+                            onUpdateDay(currentDay.day, (prev) => {
+                              const nextOverrides = { ...prev.customMealOverrides };
+                              delete nextOverrides[activeSheetSlot];
+                              return {
+                                ...prev,
+                                meals: { ...prev.meals, [activeSheetSlot]: r.id },
+                                freeMeals: { ...prev.freeMeals, [activeSheetSlot]: false },
+                                customMealOverrides: nextOverrides,
+                              };
+                            });
+                            setActiveSheetSlot(null);
+                          }}
+                          className={`w-full p-4 rounded-2xl text-left flex items-center justify-between gap-3 cursor-pointer transition-all ${
+                            isSelected
+                              ? 'bg-[#30D158]/15 border border-[#30D158]/40'
+                              : 'apple-pill-surface hover:opacity-90'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="text-sm font-extrabold text-slate-900 dark:text-white">
+                              {r.title}
+                            </div>
+                            <div className="text-xs text-slate-400 mt-0.5">
+                              {isGuille ? r.portionNoteGuille : r.portionNoteAlba}
+                            </div>
+                            <div className="text-[11px] font-bold text-[#30D158] mt-1">
+                              {m.kcal} kcal · {m.protein}g P · {m.carbs}g HC
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <span className="text-xs font-extrabold text-[#30D158] shrink-0">
+                              Activo
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                </div>
               </div>
             )}
 
+            {sheetTab === 'crear' && (
+              <form onSubmit={handleCreatePermanentRecipe} className="space-y-3">
+                <p className="text-xs text-slate-400">
+                  Añade un plato nuevo a vuestra base de datos en la nube para reutilizarlo cualquier semana:
+                </p>
+                <input
+                  type="text"
+                  required
+                  value={newRecipeTitle}
+                  onChange={(e) => setNewRecipeTitle(e.target.value)}
+                  placeholder="Nombre del nuevo plato (ej. Pollo al ajillo con patatas)"
+                  className="w-full px-3.5 py-2.5 rounded-2xl text-xs font-bold apple-pill-surface outline-none"
+                />
+
+                <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+                  {(
+                    [
+                      { id: 'airfryer_express', label: 'Airfryer / Rápido' },
+                      { id: 'batch_domingo', label: 'Batch Domingo' },
+                      { id: 'montaje_rapido', label: 'Frío / Montaje' },
+                    ] as const
+                  ).map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setNewRecipePrep(p.id)}
+                      className={`py-2 rounded-xl font-bold cursor-pointer ${
+                        newRecipePrep === p.id
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-black'
+                          : 'apple-pill-surface text-slate-400'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block">
+                      Kcal ({isGuille ? 'Guille' : 'Alba'})
+                    </span>
+                    <input
+                      type="number"
+                      value={newRecipeKcal}
+                      onChange={(e) => setNewRecipeKcal(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-bold apple-pill-surface outline-none"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block">
+                      Proteína (g)
+                    </span>
+                    <input
+                      type="number"
+                      value={newRecipeProt}
+                      onChange={(e) => setNewRecipeProt(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-bold apple-pill-surface outline-none"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block">
+                      Hidratos (g)
+                    </span>
+                    <input
+                      type="number"
+                      value={newRecipeCarbs}
+                      onChange={(e) => setNewRecipeCarbs(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-bold apple-pill-surface outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    value={newRecipeIng1Name}
+                    onChange={(e) => setNewRecipeIng1Name(e.target.value)}
+                    placeholder="Ingrediente 1 (ej. Pollo)"
+                    className="col-span-2 px-3 py-2 rounded-xl text-xs font-medium apple-pill-surface outline-none"
+                  />
+                  <input
+                    type="number"
+                    value={newRecipeIng1G}
+                    onChange={(e) => setNewRecipeIng1G(Number(e.target.value))}
+                    placeholder="Gramos"
+                    className="px-3 py-2 rounded-xl text-xs font-bold apple-pill-surface outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    value={newRecipeIng2Name}
+                    onChange={(e) => setNewRecipeIng2Name(e.target.value)}
+                    placeholder="Ingrediente 2 (ej. Arroz)"
+                    className="col-span-2 px-3 py-2 rounded-xl text-xs font-medium apple-pill-surface outline-none"
+                  />
+                  <input
+                    type="number"
+                    value={newRecipeIng2G}
+                    onChange={(e) => setNewRecipeIng2G(Number(e.target.value))}
+                    placeholder="Gramos"
+                    className="px-3 py-2 rounded-xl text-xs font-bold apple-pill-surface outline-none"
+                  />
+                </div>
+
+                <input
+                  type="text"
+                  value={newRecipeNotes}
+                  onChange={(e) => setNewRecipeNotes(e.target.value)}
+                  placeholder="Notas de preparación (opcional)"
+                  className="w-full px-3 py-2 rounded-xl text-xs font-medium apple-pill-surface outline-none"
+                />
+
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-2xl text-xs font-extrabold bg-[#30D158] text-black flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Guardar en catálogo y asignar hoy</span>
+                </button>
+              </form>
+            )}
+
             {sheetTab === 'receta' && (
-              <div className="p-4 rounded-2xl apple-pill-surface text-xs text-slate-600 dark:text-zinc-300 leading-relaxed">
-                {recipeLookup[currentDay.meals[activeSheetSlot]]?.cookingNotes}
+              <div className="p-4 rounded-2xl apple-pill-surface text-xs text-slate-600 dark:text-zinc-300 leading-relaxed space-y-2">
+                <p>{recipeLookup[currentDay.meals[activeSheetSlot]]?.cookingNotes}</p>
+                {recipeLookup[currentDay.meals[activeSheetSlot]]?.defrostAlert && (
+                  <p className="font-bold text-[#30D158]">
+                    Aviso: {recipeLookup[currentDay.meals[activeSheetSlot]]?.defrostAlert}
+                  </p>
+                )}
               </div>
             )}
 
@@ -949,7 +1284,7 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
                     type="text"
                     value={editTitle}
                     onChange={(e) => setEditTitle(e.target.value)}
-                    placeholder="Nombre del plato"
+                    placeholder="Nombre del plato puntual de hoy"
                     className="w-full px-3.5 py-2.5 rounded-2xl text-xs font-bold apple-pill-surface outline-none"
                   />
                   <div className="grid grid-cols-3 gap-2">
@@ -991,7 +1326,7 @@ export const WeeklyMenuTab: React.FC<WeeklyMenuTabProps> = ({
                     type="submit"
                     className="w-full py-3 rounded-2xl text-xs font-extrabold bg-[#30D158] text-black cursor-pointer"
                   >
-                    Guardar
+                    Guardar solo para hoy
                   </button>
                 </form>
               </div>

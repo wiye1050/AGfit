@@ -1,4 +1,4 @@
-import { BatchCookingStep, DayPlan, MealSlot } from '../types';
+import { BatchCookingStep, DayPlan, MealSlot, Recipe } from '../types';
 import { RECIPE_MAP } from './recipes';
 
 export const BATCH_COOKING_STEPS: BatchCookingStep[] = [
@@ -159,7 +159,11 @@ export interface TupperBatchSummaryItem {
   totalBatchCookedG: number;
 }
 
-export function calculateWeeklyBatchSummary(days: DayPlan[]): TupperBatchSummaryItem[] {
+export function calculateWeeklyBatchSummary(
+  days: DayPlan[],
+  customRecipes: Recipe[] = []
+): TupperBatchSummaryItem[] {
+  const customMap = Object.fromEntries(customRecipes.map((r) => [r.id, r]));
   const map = new Map<
     string,
     {
@@ -176,7 +180,7 @@ export function calculateWeeklyBatchSummary(days: DayPlan[]): TupperBatchSummary
       if (d.customMealOverrides[slot]) continue;
 
       const rId = d.meals[slot];
-      const recipe = RECIPE_MAP[rId];
+      const recipe = RECIPE_MAP[rId] || customMap[rId];
       if (!recipe || recipe.slot !== 'principal') continue;
 
       const existing = map.get(rId) || { count: 0, daysList: [] };
@@ -189,7 +193,7 @@ export function calculateWeeklyBatchSummary(days: DayPlan[]): TupperBatchSummary
   const results: TupperBatchSummaryItem[] = [];
 
   for (const [rId, info] of map.entries()) {
-    const recipe = RECIPE_MAP[rId];
+    const recipe = RECIPE_MAP[rId] || customMap[rId];
     if (!recipe) continue;
 
     let guilleCookedPerTupperG = 0;

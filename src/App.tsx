@@ -3,11 +3,13 @@ import {
   CustomShoppingItem,
   DayId,
   DayPlan,
+  ExerciseItem,
   GoogleIntegrationConfig,
   PadelMatchLog,
   Recipe,
   RunningLog,
   SetProgress,
+  ShiftCalendarMap,
   ThemeMode,
   UserTrainingHistoryEntry,
   WeightEntry,
@@ -19,6 +21,7 @@ import {
   INITIAL_TRAINING_HISTORY,
 } from './data/workouts';
 import { TodayHeader } from './components/TodayHeader';
+import { ShiftsCalendarTab } from './components/ShiftsCalendarTab';
 import { WeeklyMenuTab } from './components/WeeklyMenuTab';
 import { PersonalTrainerTab } from './components/PersonalTrainerTab';
 import { BatchCookingTab } from './components/BatchCookingTab';
@@ -28,7 +31,7 @@ import {
   subscribeHouseholdRealtime,
 } from './services/googleEcosystem';
 
-type MainTab = 'hoy' | 'entreno' | 'batch' | 'compra';
+type MainTab = 'turnos' | 'hoy' | 'entreno' | 'batch' | 'compra';
 
 const STORAGE_KEY = 'agfit_oviedo_v3';
 const USER_STORAGE_KEY = 'agfit_device_user';
@@ -62,6 +65,7 @@ const INITIAL_GOOGLE_CONFIG: GoogleIntegrationConfig = {
   calendarIdGuille: 'primary',
   calendarIdAlba: 'primary',
   syncEnabled: true,
+  shiftCalendar: {},
 };
 
 export function App() {
@@ -82,7 +86,10 @@ export function App() {
   const [activeTemplateKey, setActiveTemplateKey] = useState<'semana_a' | 'semana_b' | 'semana_c'>('semana_a');
 
   const [days, setDays] = useState<DayPlan[]>(() => WEEK_TEMPLATES.semana_a.days);
-  const [customRecipes] = useState<Recipe[]>([]);
+  const [customRecipes, setCustomRecipes] = useState<Recipe[]>([]);
+  const [customExercisesBySession, setCustomExercisesBySession] = useState<
+    Record<string, ExerciseItem[]>
+  >({});
   const [weightLogs, setWeightLogs] = useState<WeightEntry[]>(INITIAL_WEIGHT_LOGS);
 
   const [setProgressMap, setSetProgressMap] = useState<Record<string, SetProgress[]>>({});
@@ -139,6 +146,10 @@ export function App() {
       const parsed = JSON.parse(raw);
       if (parsed.days) setDays(parsed.days);
       if (parsed.theme) setTheme(parsed.theme);
+      if (Array.isArray(parsed.customRecipes)) setCustomRecipes(parsed.customRecipes);
+      if (parsed.customExercisesBySession) {
+        setCustomExercisesBySession(parsed.customExercisesBySession);
+      }
       if (parsed.weightLogs) setWeightLogs(parsed.weightLogs);
       if (parsed.setProgressMap) setSetProgressMap(parsed.setProgressMap);
       if (parsed.swappedExerciseMap) setSwappedExerciseMap(parsed.swappedExerciseMap);
@@ -150,7 +161,10 @@ export function App() {
       if (parsed.cartCheckedMap) setCartCheckedMap(parsed.cartCheckedMap);
       if (parsed.customShoppingItems) setCustomShoppingItems(parsed.customShoppingItems);
       if (parsed.googleConfig && parsed.googleConfig.firebaseProjectId) {
-        setGoogleConfig(parsed.googleConfig);
+        setGoogleConfig({
+          ...INITIAL_GOOGLE_CONFIG,
+          ...parsed.googleConfig,
+        });
       } else {
         setGoogleConfig(INITIAL_GOOGLE_CONFIG);
       }
@@ -179,6 +193,7 @@ export function App() {
           pushHouseholdRealtime(googleConfig, {
             days,
             customRecipes,
+            customExercisesBySession,
             weightLogs,
             setProgressMap,
             swappedExerciseMap,
@@ -189,6 +204,7 @@ export function App() {
             pantryCheckedMap,
             cartCheckedMap,
             customShoppingItems,
+            googleConfig,
             lastSyncAt: clientIdRef.current,
           });
           return;
@@ -202,6 +218,14 @@ export function App() {
         cloudHydratedRef.current = true;
 
         if (Array.isArray(remote.days)) setDays(remote.days as DayPlan[]);
+        if (Array.isArray(remote.customRecipes)) {
+          setCustomRecipes(remote.customRecipes as Recipe[]);
+        }
+        if (remote.customExercisesBySession) {
+          setCustomExercisesBySession(
+            remote.customExercisesBySession as Record<string, ExerciseItem[]>
+          );
+        }
         if (Array.isArray(remote.weightLogs)) setWeightLogs(remote.weightLogs as WeightEntry[]);
         if (remote.setProgressMap) {
           setSetProgressMap(remote.setProgressMap as Record<string, SetProgress[]>);
@@ -221,6 +245,15 @@ export function App() {
         if (Array.isArray(remote.customShoppingItems)) {
           setCustomShoppingItems(remote.customShoppingItems as CustomShoppingItem[]);
         }
+        if (remote.googleConfig && typeof remote.googleConfig === 'object') {
+          const remoteCfg = remote.googleConfig as GoogleIntegrationConfig;
+          if (remoteCfg.shiftCalendar) {
+            setGoogleConfig((prev) => ({
+              ...prev,
+              shiftCalendar: remoteCfg.shiftCalendar,
+            }));
+          }
+        }
 
         setTimeout(() => {
           isApplyingRemoteRef.current = false;
@@ -238,6 +271,7 @@ export function App() {
       theme,
       days,
       customRecipes,
+      customExercisesBySession,
       weightLogs,
       setProgressMap,
       swappedExerciseMap,
@@ -269,6 +303,7 @@ export function App() {
     theme,
     days,
     customRecipes,
+    customExercisesBySession,
     weightLogs,
     setProgressMap,
     swappedExerciseMap,
@@ -289,6 +324,15 @@ export function App() {
   const handleApplyTemplate = (key: 'semana_a' | 'semana_b' | 'semana_c') => {
     setActiveTemplateKey(key);
     setDays(WEEK_TEMPLATES[key].days);
+  };
+
+  const handleUpdateShiftCalendar = (
+    updater: (prev: ShiftCalendarMap) => ShiftCalendarMap
+  ) => {
+    setGoogleConfig((prev) => ({
+      ...prev,
+      shiftCalendar: updater(prev.shiftCalendar || {}),
+    }));
   };
 
   const handleUpdateSetProgress = (
@@ -395,7 +439,7 @@ export function App() {
         {/* Minimal Footer */}
         <div className="relative z-10 max-w-sm w-full mx-auto pb-2 text-center">
           <span className="text-[11px] font-medium tracking-wider uppercase text-zinc-600">
-            Nutrición · Entrenamiento · Planificación
+            Turnos · Nutrición · Entrenamiento
           </span>
         </div>
       </div>
@@ -405,6 +449,7 @@ export function App() {
   const currentSelectedDay = days.find((d) => d.day === selectedDayId) || days[0];
 
   const TABS: Array<{ id: MainTab; label: string }> = [
+    { id: 'turnos', label: 'Turnos' },
     { id: 'hoy', label: 'Hoy' },
     { id: 'entreno', label: 'Entreno' },
     { id: 'batch', label: 'Cocina' },
@@ -437,6 +482,21 @@ export function App() {
       />
 
       <main className="relative z-10 max-w-2xl mx-auto px-4 pt-5">
+        {activeTab === 'turnos' && (
+          <ShiftsCalendarTab
+            days={days}
+            activeUser={activeUser}
+            shiftCalendar={googleConfig.shiftCalendar || {}}
+            onUpdateShiftCalendar={handleUpdateShiftCalendar}
+            onReplaceDays={setDays}
+            onSelectDayAndGoToHoy={(dayId) => {
+              setSelectedDayId(dayId);
+              setActiveTab('hoy');
+            }}
+            customRecipes={customRecipes}
+          />
+        )}
+
         {activeTab === 'hoy' && (
           <WeeklyMenuTab
             days={days}
@@ -447,6 +507,7 @@ export function App() {
             onApplyTemplate={handleApplyTemplate}
             onUpdateDay={handleUpdateDay}
             onGoToWorkout={() => setActiveTab('entreno')}
+            onGoToShifts={() => setActiveTab('turnos')}
             onToggleSupplement={(dayId, key) =>
               handleUpdateDay(dayId, (prev) => ({
                 ...prev,
@@ -457,6 +518,9 @@ export function App() {
               }))
             }
             customRecipes={customRecipes}
+            onAddCustomRecipe={(recipe) =>
+              setCustomRecipes((prev) => [...prev, recipe])
+            }
           />
         )}
 
@@ -473,6 +537,13 @@ export function App() {
                 [exId]: ((prev[exId] || 0) + 1) % (maxAlts + 1),
               }))
             }
+            customExercisesBySession={customExercisesBySession}
+            onAddCustomExercise={(sessionId, ex) =>
+              setCustomExercisesBySession((prev) => ({
+                ...prev,
+                [sessionId]: [...(prev[sessionId] || []), ex],
+              }))
+            }
           />
         )}
 
@@ -484,6 +555,7 @@ export function App() {
               setCompletedBatchSteps((prev) => ({ ...prev, [stepId]: !prev[stepId] }))
             }
             onResetBatchSteps={() => setCompletedBatchSteps({})}
+            customRecipes={customRecipes}
           />
         )}
 
@@ -519,14 +591,15 @@ export function App() {
             onDeleteCustomItem={(id) =>
               setCustomShoppingItems((prev) => prev.filter((c) => c.id !== id))
             }
+            customRecipes={customRecipes}
           />
         )}
       </main>
 
-      {/* Clean 4-Tab Typographic Bottom Dock (Zero icons/emojis) */}
+      {/* Clean 5-Tab Typographic Bottom Dock (Turnos · Hoy · Entreno · Cocina · Compra) */}
       <nav
         aria-label="Navegación principal"
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white/90 dark:bg-[#121215]/95 backdrop-blur-2xl border border-black/10 dark:border-white/10 rounded-full p-1.5 shadow-2xl flex items-center gap-1 no-print"
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white/90 dark:bg-[#121215]/95 backdrop-blur-2xl border border-black/10 dark:border-white/10 rounded-full p-1.5 shadow-2xl flex items-center gap-0.5 sm:gap-1 no-print"
       >
         {TABS.map((tab) => {
           const active = activeTab === tab.id;
@@ -535,7 +608,7 @@ export function App() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`px-5 py-2 rounded-full text-xs font-extrabold tracking-tight transition-all cursor-pointer ${
+              className={`px-3.5 sm:px-4 py-2 rounded-full text-xs font-extrabold tracking-tight transition-all cursor-pointer ${
                 active
                   ? 'bg-[#30D158] text-black shadow-sm'
                   : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'

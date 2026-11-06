@@ -5,6 +5,7 @@ import {
   GuilleShift,
   MacroSet,
   MealSlot,
+  Recipe,
   TrainingType,
 } from '../types';
 import { RECIPE_MAP } from '../data/recipes';
@@ -97,7 +98,11 @@ export interface DayNutritionSummary {
   >;
 }
 
-export function computeDayNutrition(dayPlan: DayPlan): DayNutritionSummary {
+export function computeDayNutrition(
+  dayPlan: DayPlan,
+  customRecipes: Recipe[] = []
+): DayNutritionSummary {
+  const customMap = Object.fromEntries(customRecipes.map((r) => [r.id, r]));
   const guilleLevel = getCarbCycleLevel(
     dayPlan.guilleTraining,
     dayPlan.guilleCustomActivity?.intensity
@@ -136,7 +141,7 @@ export function computeDayNutrition(dayPlan: DayPlan): DayNutritionSummary {
       continue;
     }
 
-    const recipe = RECIPE_MAP[dayPlan.meals[slot]];
+    const recipe = RECIPE_MAP[dayPlan.meals[slot]] || customMap[dayPlan.meals[slot]];
     if (!recipe) continue;
 
     if (slot !== 'snack_nocturno') {

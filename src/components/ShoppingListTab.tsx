@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   CustomShoppingItem,
   DayPlan,
+  Recipe,
   ShoppingAisle,
 } from '../types';
 import { aggregateWeeklyShoppingList } from '../utils/shoppingEngine';
@@ -19,6 +20,7 @@ interface ShoppingListTabProps {
   onToggleCustomItemPantry: (id: string) => void;
   onToggleCustomItemCart: (id: string) => void;
   onDeleteCustomItem: (id: string) => void;
+  customRecipes?: Recipe[];
 }
 
 const AISLE_ORDER: ShoppingAisle[] = [
@@ -51,11 +53,12 @@ export const ShoppingListTab: React.FC<ShoppingListTabProps> = ({
   onToggleCustomItemPantry,
   onToggleCustomItemCart,
   onDeleteCustomItem,
+  customRecipes = [],
 }) => {
   const [filterMode, setFilterMode] = useState<'pendientes' | 'despensa' | 'todos'>('pendientes');
   const [newName, setNewName] = useState('');
 
-  const menuItems = aggregateWeeklyShoppingList(days);
+  const menuItems = aggregateWeeklyShoppingList(days, customRecipes);
 
   const handleQuickAdd = (e: React.FormEvent) => {
     e.preventDefault();
